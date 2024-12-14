@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "LeetWithGit",
+  "version": "1.0",
+  "description": "Automatically push successful LeetCode solutions to GitHub",
+  "permissions": ["storage", "activeTab", "scripting", "notifications"],
+  "host_permissions": ["https://leetcode.com/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/*"],
+      "js": ["content.js"],
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

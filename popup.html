@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LeetWithGit</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #2cbb5d;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #259d4f;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #e7f7ed;
+      color: #2cbb5d;
+    }
+    .error {
+      background-color: #ffeaea;
+      color: #ff4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>LeetWithGit Settings</h2>
+    <div>
+      <label for="github-token">GitHub Personal Access Token:</label>
+      <input type="password" id="github-token" placeholder="Enter your GitHub token">
+    </div>
+    <div>
+      <label for="repo-name">Repository Name:</label>
+      <input type="text" id="repo-name" placeholder="username/repository">
+    </div>
+    <div>
+      <label for="branch-name">Branch Name:</label>
+      <input type="text" id="branch-name" placeholder="main">
+    </div>
+    <button id="save">Save Settings</button>
+    <div id="status" class="status"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
