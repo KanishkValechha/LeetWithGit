@@ -1,69 +1,156 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>LeetWithGit</title>
-  <style>
-    body {
-      width: 300px;
-      padding: 15px;
-      font-family: Arial, sans-serif;
-    }
-    .container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    input {
-      width: 100%;
-      padding: 8px;
-      margin: 5px 0;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      background-color: #2cbb5d;
-      color: white;
-      padding: 10px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #259d4f;
-    }
-    .status {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 4px;
-    }
-    .success {
-      background-color: #e7f7ed;
-      color: #2cbb5d;
-    }
-    .error {
-      background-color: #ffeaea;
-      color: #ff4444;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>LeetWithGit Settings</h2>
-    <div>
-      <label for="github-token">GitHub Personal Access Token:</label>
-      <input type="password" id="github-token" placeholder="Enter your GitHub token">
+  <head>
+    <title>LeetWithGit</title>
+    <style>
+      body {
+        width: 300px;
+        padding: 15px;
+        font-family: Arial, sans-serif;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .auth-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .verification-code {
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+        margin: 10px 0;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 4px;
+      }
+      .repo-container {
+        display: none;
+      }
+      .user-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .user-info img {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+      }
+      .repo-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .repo-item {
+        padding: 8px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+      }
+      .repo-item:hover {
+        background-color: #f5f5f5;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        background-color: #2cbb5d;
+        color: white;
+        padding: 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+      }
+      button.github-auth {
+        background-color: #24292e;
+      }
+      button:hover {
+        opacity: 0.9;
+      }
+      .status {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 4px;
+      }
+      .success {
+        background-color: #e7f7ed;
+        color: #2cbb5d;
+      }
+      .error {
+        background-color: #ffeaea;
+        color: #ff4444;
+      }
+      .logout-btn {
+        background-color: #dc3545;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>LeetWithGit Settings</h2>
+
+      <div id="auth-container" class="auth-container">
+        <button id="github-auth" class="github-auth">
+          Sign in with GitHub
+        </button>
+        <div
+          id="verification-code"
+          class="verification-code"
+          style="display: none"
+        ></div>
+        <div id="verification-instructions" style="display: none">
+          1. Copy the code above<br />
+          2. Click the button below to open GitHub<br />
+          3. Paste the code to authorize
+        </div>
+        <button id="open-github" style="display: none">
+          Open GitHub Verification
+        </button>
+
+        // Temporary debug button in HTML
+        <button id="debug-btn" style="margin-top: 10px">Debug Storage</button>
+      </div>
+
+      <div id="repo-container" class="repo-container">
+        <div id="user-info" class="user-info">
+          <img id="user-avatar" src="" alt="User avatar" />
+          <span id="user-name"></span>
+        </div>
+
+        <div>
+          <label for="repo-search">Search repositories:</label>
+          <input
+            type="text"
+            id="repo-search"
+            placeholder="Search your repositories"
+          />
+        </div>
+
+        <div id="repo-list" class="repo-list"></div>
+
+        <div>
+          <label for="branch-name">Branch Name:</label>
+          <input type="text" id="branch-name" placeholder="main" />
+        </div>
+
+        <button id="save">Save Settings</button>
+        <button id="logout" class="logout-btn">Sign Out</button>
+      </div>
+
+      <div id="status" class="status"></div>
     </div>
-    <div>
-      <label for="repo-name">Repository Name:</label>
-      <input type="text" id="repo-name" placeholder="username/repository">
-    </div>
-    <div>
-      <label for="branch-name">Branch Name:</label>
-      <input type="text" id="branch-name" placeholder="main">
-    </div>
-    <button id="save">Save Settings</button>
-    <div id="status" class="status"></div>
-  </div>
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>

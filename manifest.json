@@ -2,20 +2,24 @@
   "manifest_version": 3,
   "name": "LeetWithGit",
   "version": "1.0",
-  "description": "Automatically push successful LeetCode solutions to GitHub",
-  "permissions": ["storage", "activeTab", "scripting", "notifications"],
-  "host_permissions": ["https://leetcode.com/*"],
+  "description": "Automatically save LeetCode solutions to GitHub",
+
   "action": {
     "default_popup": "popup.html"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://leetcode.com/*"],
-      "js": ["content.js"],
-      "all_frames": true
-    }
-  ],
+
   "background": {
     "service_worker": "background.js"
-  }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.leetcode.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+
+  "permissions": ["storage", "tabs", "identity","alarms"],
+
+  "host_permissions": ["https://github.com/*", "https://api.github.com/*"]
 }
