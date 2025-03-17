@@ -58,8 +58,8 @@ function interceptFetch() {
 
       clonedResponse.json().then(data => {
           // console.log("📤 Fetch Request:", { url, requestBody });
-          console.log("📥 Fetch Response:", { url, data });
-          if (url.includes("/submissions/detail/") && data?.state === "SUCCESS") {
+          // console.log("📥 Fetch Response:", { url, data });
+          if (url.includes("/submissions/detail/") && data?.state === "SUCCESS" && data?.status_msg==="Accepted") {
             console.log("Submission successful, fetching problem details...");
             handleSuccessfulSubmission(data,latestSubmission);
         }
@@ -88,6 +88,12 @@ window.postMessage({
 }, "*");
 }
 
+function htmlToText(html) {
+  let doc = new DOMParser().parseFromString(html, "text/html");
+  return doc.body.textContent || "";
+}
+
+
 // Function to fetch problem details
 async function fetchProblemDetails(questionId) {
     try {
@@ -114,7 +120,7 @@ async function fetchProblemDetails(questionId) {
             return {
                 title: json.data.question.title,
                 difficulty: json.data.question.difficulty,
-                description: json.data.question.content
+                description: htmlToText(json.data.question.content)
             };
         }
     } catch (error) {
@@ -131,7 +137,11 @@ async function getProblemSlug(questionId) {
     return problem ? problem.stat.question__title_slug : null;
 }
 
-interceptFetch();
+if (!window.__fetchIntercepted) {
+  window.__fetchIntercepted = true;
+  interceptFetch();
+}
+
 }
 
 async function handleGitHubPush(payload) {
@@ -188,7 +198,7 @@ const responseData = await response.json();
 if (!response.ok) {
   if (response.status === 422) {
     console.log("File already exists. Attempting to delete...");
-
+    try{
     // Get SHA of the existing file
     const fileResponse = await fetch(apiUrl, {
       method: "GET",
@@ -224,8 +234,12 @@ if (!response.ok) {
     }
 
     console.log("File deleted successfully. Retrying push...");
-    return handleGitHubPush(payload); // Retry after deletion
-  }
+    return await handleGitHubPush(payload); // Retry after deletion
+  }catch(deleteError){
+      console.error("File deletion failed:", deleteError);
+      throw new Error("Push failed after deletion attempt.");
+
+}}
 
   throw new Error(`GitHub API error: ${response.status} - ${JSON.stringify(responseData)}`);
 }
