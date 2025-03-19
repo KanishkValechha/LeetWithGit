@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "BetterLeetWithGit",
-  "version": "2.0",
+  "name": "LeetWithGit",
+  "version": "1.5",
   "description": "Automatically push successful LeetCode solutions to GitHub",
   "permissions": ["storage", "activeTab", "scripting", "notifications","webRequest"],
   "host_permissions": ["https://leetcode.com/*"],
