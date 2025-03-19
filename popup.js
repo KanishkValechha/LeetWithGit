@@ -26,3 +26,20 @@ function showStatus(message, isSuccess) {
   status.textContent = message;
   status.className = `status ${isSuccess ? "success" : "error"}`;
 }
+async function loadSettings() {
+  const settings = await chrome.storage.sync.get([
+    "githubToken",
+    "repoName",
+    "branchName",
+    "debugMode",
+  ]);
+  
+  if (settings?.repoName) {
+    document.getElementById("repo-name").value = settings.repoName;
+  }
+  if (settings?.branchName) {
+    document.getElementById("branch-name").value = settings.branchName;
+  }
+}
+
+loadSettings();
