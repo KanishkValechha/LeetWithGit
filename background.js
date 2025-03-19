@@ -187,7 +187,7 @@ const response = await fetch(apiUrl, {
     Accept: "application/vnd.github.v3+json",
   },
   body: JSON.stringify({
-    message: `Add Better LeetCode solution: ${fileName}`,
+    message: `Add LeetCode solution: ${fileName}`,
     content: btoa(unescape(encodeURIComponent(fileContent))),
     branch: settings.branchName || "main",
   }),
