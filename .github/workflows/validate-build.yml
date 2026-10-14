@@ -1,0 +1,13 @@
+name: Validate TypeScript build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-build:
+    uses: ./.github/workflows/build-extension.yml

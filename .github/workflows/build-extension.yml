@@ -1,0 +1,44 @@
+name: Build extension
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install TypeScript compiler
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check TypeScript
+        run: npm run typecheck
+
+      - name: Build extension JavaScript
+        run: npm run build
+
+      - name: Package extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./manifest.json').version")"
+          mkdir -p dist
+          zip -j "dist/LeetWithGit-v${version}.zip" manifest.json background.js content.js popup.html popup.js icon48.png
+
+      - name: Upload validated package
+        uses: actions/upload-artifact@v4
+        with:
+          name: leet-with-git-extension
+          path: dist/LeetWithGit-v*.zip
+          if-no-files-found: error
+          retention-days: 14
