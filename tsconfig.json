@@ -1,16 +1,6 @@
 {
+  "extends": "./.wxt/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "preserve",
-    "moduleDetection": "legacy",
-    "lib": ["ES2022", "DOM"],
-    "strict": true,
-    "noEmitOnError": true,
-    "removeComments": false,
-    "rootDir": "src",
-    "outDir": ".",
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["node_modules"]
+    "exactOptionalPropertyTypes": true
+  }
 }

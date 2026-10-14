@@ -4,25 +4,49 @@ Automatically save accepted LeetCode submissions to a GitHub repository with a C
 
 ## Install in Chrome
 
-1. Download the latest `LeetWithGit-v*.zip` from [Releases](https://github.com/KanishkValechha/LeetWithGit/releases) and extract it, or clone this repository. The built JavaScript files are committed, so a clone loads as is.
+1. Download the latest `LeetWithGit-v*-chrome.zip` from [Releases](https://github.com/KanishkValechha/LeetWithGit/releases) and extract it, or build it from source (see below) and use `.output/chrome-mv3`.
 2. Keep the folder somewhere permanent. It should contain `manifest.json` directly.
 3. Open `chrome://extensions` and turn on **Developer mode**.
-4. Select **Load unpacked** and choose the extracted folder.
+4. Select **Load unpacked** and choose the folder.
 5. Pin the extension, open its settings, and complete the setup below.
 
-The ZIP has no build or dependency-install step for users. Chrome does not automatically update a manually loaded extension; download a newer release and use **Reload** on the extension card after replacing its files.
+Chrome does not automatically update a manually loaded extension; download a newer release and use **Reload** on the extension card after replacing its files.
 
-## Develop with TypeScript
+## Install in Firefox
 
-The TypeScript sources in `src/` are the development source of truth. The root-level JavaScript files are generated build outputs and remain the files loaded by Chrome, so the manifest and packaged extension keep the same runtime entry points.
+Firefox 128 or newer (or a Firefox-based browser such as Zen) is required.
 
-```powershell
+1. Run `npm run build:firefox`.
+2. Open `about:debugging#/runtime/this-firefox` and select **Load Temporary Add-on**.
+3. Choose `.output/firefox-mv3/manifest.json`.
+
+Temporary add-ons are removed when the browser restarts. If submissions are not saved, check that `leetcode.com` and `api.github.com` are allowed under the add-on's **Permissions** tab in `about:addons`.
+
+## Develop
+
+The extension is built with [WXT](https://wxt.dev). Requires Node.js 22 or newer.
+
+```sh
 npm install
+npm run dev        # opens Chrome with the extension loaded and reloads on change
 npm run typecheck
-npm run build
+npm run build      # writes the unpacked extension to .output/chrome-mv3
+npm run zip        # writes the store-ready .output/LeetWithGit-v<version>-chrome.zip
 ```
 
-The compiler is a pinned development-only dependency; the extension has no JavaScript runtime dependencies. The release workflow type-checks and compiles the TypeScript sources before packaging the same root-level JavaScript files.
+`dev`, `build` and `zip` have `:firefox` variants, e.g. `npm run dev:firefox`. To make `dev:firefox` open a Firefox-based browser other than Firefox, add a gitignored `web-ext.config.ts`:
+
+```ts
+import { defineWebExtConfig } from 'wxt';
+
+export default defineWebExtConfig({
+  binaries: { firefox: '/Applications/Zen.app/Contents/MacOS/zen' },
+});
+```
+
+- `entrypoints/` holds the background service worker, the two LeetCode content scripts and the popup. WXT generates `manifest.json` from these files and `wxt.config.ts`.
+- `lib/` holds code shared between entrypoints: Zod schemas for submissions and runtime messages, typed storage items, and the GitHub client.
+- The version comes from `package.json`.
 
 ## Configure GitHub sync
 
@@ -39,7 +63,7 @@ When LeetCode marks a submission accepted, the extension saves it under `leetcod
 - The extension reads the LeetCode submission request and accepted result on `leetcode.com` to capture the solution and identify the problem.
 - It checks repository/branch access and sends the solution and problem metadata to the repository configured in the popup.
 - Your GitHub token is stored in local extension storage and is not copied into Chrome sync settings.
-- The extension needs LeetCode page access, GitHub API access, local storage, scripting, notifications, and alarms for queued retries.
+- The extension needs LeetCode page access, GitHub API access, storage, notifications, and alarms for queued retries.
 
 ## Known overwrite behavior
 
@@ -47,14 +71,13 @@ If a solution file with the same question and language already exists, the curre
 
 ## Create a release
 
-Every push and pull request runs the TypeScript type-check, build, and packaging workflow. It publishes the versioned ZIP as a downloadable workflow artifact for 14 days. Publishing a GitHub Release runs that same reusable workflow and attaches its generated ZIP to the release, so validation and release use the same build and packaging steps. The ZIP is ready to extract and load unpacked; it does not install the extension automatically.
+Every push to `main` and every pull request type-checks the code and builds the ZIP, which is kept as a workflow artifact for 14 days. Publishing a GitHub Release runs the same build and attaches the ZIP to the release.
 
 ## Permissions
 
 | Permission | Purpose |
 | --- | --- |
 | `storage` | Save the token locally and sync repository/branch preferences |
-| `scripting` | Attach submission capture to LeetCode pages |
 | `notifications` | Report successful uploads and queued failures |
 | `alarms` | Retry queued uploads while the service worker is suspended |
 | `leetcode.com` host access | Observe LeetCode submissions and retrieve problem details |

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LeetWithGit settings</title>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <h1>LeetWithGit</h1>
+    <p>Save accepted LeetCode solutions to your repository.</p>
+
+    <label for="github-token">Fine-grained GitHub token</label>
+    <input id="github-token" type="password" placeholder="Paste token to add or replace it" autocomplete="off" spellcheck="false">
+    <div id="token-state" class="hint">Token is kept on this browser and is not synced.</div>
+
+    <label for="repo-name">Repository</label>
+    <input id="repo-name" type="text" placeholder="username/repository" autocomplete="off" spellcheck="false">
+
+    <label for="branch-name">Branch</label>
+    <input id="branch-name" type="text" placeholder="main" autocomplete="off" spellcheck="false">
+
+    <div class="buttons">
+      <button id="save" type="button">Save settings</button>
+      <button id="test-connection" type="button">Test connection</button>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <div id="sync-status" class="status" role="status" aria-live="polite"></div>
+
+    <p class="note">For a fine-grained token, select this repository and grant <strong>Contents: Read and write</strong>. The extension stores the token locally and retries temporary upload failures automatically.</p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
