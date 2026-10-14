@@ -4,13 +4,23 @@ Automatically save accepted LeetCode submissions to a GitHub repository with a C
 
 ## Install in Chrome
 
-1. Download the latest `LeetWithGit-v*.zip` from [Releases](https://github.com/KanishkValechha/LeetWithGit/releases) and extract it, or build it from source (see below) and use `.output/chrome-mv3`.
+1. Download the latest `LeetWithGit-v*-chrome.zip` from [Releases](https://github.com/KanishkValechha/LeetWithGit/releases) and extract it, or build it from source (see below) and use `.output/chrome-mv3`.
 2. Keep the folder somewhere permanent. It should contain `manifest.json` directly.
 3. Open `chrome://extensions` and turn on **Developer mode**.
 4. Select **Load unpacked** and choose the folder.
 5. Pin the extension, open its settings, and complete the setup below.
 
 Chrome does not automatically update a manually loaded extension; download a newer release and use **Reload** on the extension card after replacing its files.
+
+## Install in Firefox
+
+Firefox 128 or newer (or a Firefox-based browser such as Zen) is required.
+
+1. Run `npm run build:firefox`.
+2. Open `about:debugging#/runtime/this-firefox` and select **Load Temporary Add-on**.
+3. Choose `.output/firefox-mv3/manifest.json`.
+
+Temporary add-ons are removed when the browser restarts. If submissions are not saved, check that `leetcode.com` and `api.github.com` are allowed under the add-on's **Permissions** tab in `about:addons`.
 
 ## Develop
 
@@ -21,7 +31,17 @@ npm install
 npm run dev        # opens Chrome with the extension loaded and reloads on change
 npm run typecheck
 npm run build      # writes the unpacked extension to .output/chrome-mv3
-npm run zip        # writes the store-ready .output/LeetWithGit-v<version>.zip
+npm run zip        # writes the store-ready .output/LeetWithGit-v<version>-chrome.zip
+```
+
+`dev`, `build` and `zip` have `:firefox` variants, e.g. `npm run dev:firefox`. To make `dev:firefox` open a Firefox-based browser other than Firefox, add a gitignored `web-ext.config.ts`:
+
+```ts
+import { defineWebExtConfig } from 'wxt';
+
+export default defineWebExtConfig({
+  binaries: { firefox: '/Applications/Zen.app/Contents/MacOS/zen' },
+});
 ```
 
 - `entrypoints/` holds the background service worker, the two LeetCode content scripts and the popup. WXT generates `manifest.json` from these files and `wxt.config.ts`.
