@@ -123,7 +123,9 @@ function installSubmissionCapture(): void {
       }
     }
     while (completedSubmissionIds.size > 1000) {
-      completedSubmissionIds.delete(completedSubmissionIds.values().next().value);
+      const oldest = completedSubmissionIds.values().next().value;
+      if (oldest === undefined) break;
+      completedSubmissionIds.delete(oldest);
     }
   }
 
@@ -163,7 +165,7 @@ function installSubmissionCapture(): void {
     this: CapturedSubmission,
     problemSlug: string,
   ): Promise<LeetCodeProblemDetails> {
-    let slug = problemSlug;
+    let slug: string | undefined = problemSlug;
     if (!slug) {
       const response = await originalFetch.call(window, "https://leetcode.com/api/problems/all/");
       const data = await response.json() as { stat_status_pairs?: ProblemListEntry[] };

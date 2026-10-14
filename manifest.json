@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "BetterLeetWithGit",
+  "name": "LeetWithGit",
   "version": "1.6.0",
   "description": "Automatically push successful LeetCode solutions to GitHub",
   "permissions": ["storage", "scripting", "notifications", "alarms"],

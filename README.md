@@ -1,11 +1,11 @@
-# BetterLeetWithGit
+# LeetWithGit
 
 Automatically save accepted LeetCode submissions to a GitHub repository with a Chrome extension.
 
 ## Install in Chrome
 
-1. Download the latest `BetterLeetWithGit-v*.zip` from [Releases](https://github.com/crazy-vedic/BetterLeetWithGit/releases).
-2. Extract the ZIP to a folder you want to keep. The extracted folder should contain `manifest.json` directly.
+1. Download the latest `LeetWithGit-v*.zip` from [Releases](https://github.com/KanishkValechha/LeetWithGit/releases) and extract it, or clone this repository. The built JavaScript files are committed, so a clone loads as is.
+2. Keep the folder somewhere permanent. It should contain `manifest.json` directly.
 3. Open `chrome://extensions` and turn on **Developer mode**.
 4. Select **Load unpacked** and choose the extracted folder.
 5. Pin the extension, open its settings, and complete the setup below.

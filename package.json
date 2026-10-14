@@ -1,8 +1,8 @@
 {
-  "name": "better-leet-with-git",
+  "name": "leet-with-git",
   "private": true,
   "version": "1.6.0",
-  "description": "TypeScript development toolchain for the BetterLeetWithGit Chrome extension",
+  "description": "TypeScript development toolchain for the LeetWithGit Chrome extension",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
