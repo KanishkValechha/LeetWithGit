@@ -56,12 +56,13 @@ export default defineWebExtConfig({
 4. Pick the repository from the list (or type `OWNER/REPOSITORY` if the token cannot list repositories) and check the branch.
 5. Select **Connect repository**. It checks token access, repository access, branch existence and push permission before saving. The token is stored in this browser's local extension storage. Repository and branch preferences use Chrome sync storage.
 
-When LeetCode marks a submission accepted, the extension saves it under `leetcode/` in your repository. Temporary network or GitHub errors are queued and retried automatically. The popup shows upload progress while a solution is being committed, queued uploads with a **Retry now** button and your five most recently saved solutions. The toolbar badge shows ↑ while uploading, ✓ after a save and the number of queued uploads while they wait to retry. Repository, branch and token can be changed under the popup's settings.
+When LeetCode marks a submission accepted, the extension saves it under `leetcode/` in your repository. Temporary network or GitHub errors are queued and retried automatically. The popup shows upload progress while a solution is being committed, queued uploads with a **Retry now** button, your solved counts from LeetCode and your five most recently saved solutions. The toolbar badge shows ↑ while uploading, ✓ after a save and the number of queued uploads while they wait to retry. Repository, branch and token can be changed under the popup's settings.
 
 ## Privacy and permissions
 
 - The extension reads the LeetCode submission request and accepted result on `leetcode.com` to capture the solution and identify the problem.
 - It checks repository/branch access and sends the solution and problem metadata to the repository configured in the popup.
+- While you are signed in on `leetcode.com`, it reads your username and solved counts from LeetCode to show them in the popup. They are kept in local extension storage.
 - Your GitHub token is stored in local extension storage and is not copied into Chrome sync settings.
 - The extension needs LeetCode page access, GitHub API access, storage, notifications, and alarms for queued retries.
 
@@ -80,7 +81,7 @@ Every push to `main` and every pull request type-checks the code and builds the 
 | `storage` | Save the token locally and sync repository/branch preferences |
 | `notifications` | Report successful uploads and queued failures |
 | `alarms` | Retry queued uploads while the service worker is suspended |
-| `leetcode.com` host access | Observe LeetCode submissions and retrieve problem details |
+| `leetcode.com` host access | Observe LeetCode submissions and retrieve problem details and your solved counts |
 | `api.github.com` host access | Check configuration and upload solution files |
 
 ## License

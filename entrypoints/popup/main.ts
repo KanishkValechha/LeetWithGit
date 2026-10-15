@@ -6,6 +6,7 @@ import {
   branchName,
   githubToken,
   lastSyncStatus,
+  leetCodeProfile,
   pendingSubmissions,
   recentSolutions,
   repoName,
@@ -61,16 +62,17 @@ async function showSettings(): Promise<void> {
 }
 
 async function loadHomeData(): Promise<HomeData> {
-  const [repo, branch, recent, queue, active, status, tabProblem] = await Promise.all([
+  const [repo, branch, recent, profile, queue, active, status, tabProblem] = await Promise.all([
     repoName.getValue(),
     branchName.getValue(),
     recentSolutions.getValue(),
+    leetCodeProfile.getValue(),
     pendingSubmissions.getValue(),
     activeUpload.getValue(),
     lastSyncStatus.getValue(),
     currentLeetCodeProblem(),
   ]);
-  return { repo, branch, recent, queue, active, status, tabProblem };
+  return { repo, branch, recent, profile, queue, active, status, tabProblem };
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
@@ -89,7 +91,7 @@ function refreshHome(): void {
   if (screen === 'home') void showHome(false);
 }
 
-for (const item of [pendingSubmissions, activeUpload, recentSolutions, lastSyncStatus]) item.watch(refreshHome);
+for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus]) item.watch(refreshHome);
 // Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
 

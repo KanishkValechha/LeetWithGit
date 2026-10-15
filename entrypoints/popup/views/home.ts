@@ -1,3 +1,4 @@
+import type { LeetCodeProfile } from '@/lib/leetcode-profile';
 import { sendMessage } from '@/lib/messages';
 import type { ActiveUpload, QueuedSubmission, SavedSolution, SyncStatus } from '@/lib/storage';
 import { difficultyClass, h, icon, languageLabel, timeAgo, timeUntil } from '../dom';
@@ -6,6 +7,7 @@ export interface HomeData {
   repo: string;
   branch: string;
   recent: SavedSolution[];
+  profile: LeetCodeProfile | null;
   queue: QueuedSubmission[];
   active: ActiveUpload | null;
   status: SyncStatus | null;
@@ -21,9 +23,14 @@ let celebratedAt = 0;
 
 export function homeView(data: HomeData, { onSettings }: { onSettings: () => void }): HTMLElement {
   const activity = activityCard(data);
-  const content = data.recent.length
-    ? [activity ?? idleRow(data.tabProblem), recentList(data.recent)]
-    : [activity ?? allSet(), !activity && leetCodeButton(data.tabProblem)];
+  const content =
+    data.profile || data.recent.length
+      ? [
+          activity ?? idleRow(data.tabProblem),
+          data.profile && statsBlock(data.profile),
+          data.recent.length > 0 && recentList(data.recent),
+        ]
+      : [activity ?? allSet(), !activity && leetCodeButton(data.tabProblem)];
 
   return h(
     'div',
@@ -168,6 +175,42 @@ function activityHead(
       { class: 'meta' },
       h('span', { class: `difficulty ${difficultyClass(difficulty)}` }, difficulty),
       h('span', { class: 'mono dim' }, languageLabel(language)),
+    ),
+  );
+}
+
+function statsBlock({ username, solved, total }: LeetCodeProfile): HTMLElement {
+  const difficulties = [
+    ['easy', 'Easy'],
+    ['medium', 'Medium'],
+    ['hard', 'Hard'],
+  ] as const;
+  return h(
+    'section',
+    { class: 'stats' },
+    h(
+      'div',
+      { class: 'stats-head' },
+      h('span', { class: 'stats-number' }, String(solved.easy + solved.medium + solved.hard)),
+      h('span', { class: 'dim' }, 'solved'),
+      h(
+        'a',
+        { class: 'link mono stats-user', href: `https://leetcode.com/u/${encodeURIComponent(username)}/`, target: '_blank' },
+        `@${username}`,
+      ),
+    ),
+    ...difficulties.map(([key, label]) =>
+      h(
+        'div',
+        { class: `stats-row ${key}` },
+        h('span', null, label),
+        h(
+          'span',
+          { class: 'stats-track' },
+          h('span', { class: 'stats-fill', style: `width:${total[key] ? (solved[key] / total[key]) * 100 : 0}%` }),
+        ),
+        h('span', { class: 'stats-count mono' }, String(solved[key]), h('span', { class: 'dim' }, ` / ${total[key]}`)),
+      ),
     ),
   );
 }

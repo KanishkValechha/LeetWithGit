@@ -475,6 +475,28 @@ label { font-size: 12px; font-weight: 500; color: var(--muted); }
 }
 .activity-foot { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
 
+/* Stats */
+.stats {
+  display: grid;
+  gap: 9px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.stats-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; font-size: 12px; }
+.stats-number { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+.stats-user { margin-left: auto; }
+.stats-row { display: grid; grid-template-columns: 52px 1fr 78px; align-items: center; gap: 10px; font-size: 12px; }
+.stats-row.easy { color: var(--easy); }
+.stats-row.medium { color: var(--medium); }
+.stats-row.hard { color: var(--hard); }
+.stats-track { height: 4px; border-radius: 2px; background: #222; overflow: hidden; }
+.stats-fill { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+.enter .stats-fill { animation: grow 700ms 150ms var(--ease) both; }
+@keyframes grow { from { width: 0; } }
+.stats-count { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+
 /* Recent */
 .recent { display: grid; gap: 6px; }
 .section-label {
