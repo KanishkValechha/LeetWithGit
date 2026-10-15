@@ -1,11 +1,11 @@
 import { browser } from 'wxt/browser';
-import { errorMessage } from '@/lib/errors';
-import { REPOSITORY_PATTERN } from '@/lib/github';
-import { sendMessage } from '@/lib/messages';
-import { branchName, githubToken, repoName } from '@/lib/storage';
-import { NEW_TOKEN_URL, verifyRepository } from '../api';
-import { h, icon } from '../dom';
-
+import { NEW_TOKEN_URL, REPOSITORY_PATTERN } from '@/lib/constants';
+import { verifyRepository } from '@/lib/api/github';
+import { sendMessage } from '@/lib/api/messages';
+import { branchName, githubToken, repoName } from '@/lib/api/storage';
+import { errorMessage, maskToken } from '@/lib/utils/helpers';
+import { h } from '../dom';
+import { icon } from '../icons';
 interface Settings {
   token: string | null;
   repo: string;
@@ -118,8 +118,4 @@ function textInput(id: string, value: string, placeholder: string): HTMLInputEle
   const input = h('input', { id, class: 'input mono', placeholder, autocomplete: 'off', spellcheck: 'false' });
   input.value = value;
   return input;
-}
-
-function maskToken(token: string): string {
-  return `${token.slice(0, token.startsWith('github_pat_') ? 11 : 4)}••••${token.slice(-4)}`;
 }

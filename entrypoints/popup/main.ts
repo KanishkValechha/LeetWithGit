@@ -1,6 +1,5 @@
 import './style.css';
 import { browser } from 'wxt/browser';
-import { errorMessage } from '@/lib/errors';
 import {
   activeUpload,
   branchName,
@@ -10,7 +9,8 @@ import {
   pendingSubmissions,
   recentSolutions,
   repoName,
-} from '@/lib/storage';
+} from '@/lib/api/storage';
+import { errorMessage } from '@/lib/utils/helpers';
 import { h } from './dom';
 import { homeView, type HomeData } from './views/home';
 import { settingsView } from './views/settings';

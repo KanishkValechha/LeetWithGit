@@ -1,9 +1,9 @@
 import { browser, type Browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { z } from 'zod';
-import { errorMessage } from '@/lib/errors';
-import { GitHubError, githubRequest, REPOSITORY_PATTERN } from '@/lib/github';
-import { runtimeMessageSchema } from '@/lib/messages';
+import { REPOSITORY_PATTERN } from '@/lib/constants';
+import { runtimeMessageSchema } from '@/lib/schemas/messages';
+import { setBadge } from '@/lib/api/badge';
+import { uploadSolution } from '@/lib/api/github';
 import {
   activeUpload,
   branchName,
@@ -14,18 +14,15 @@ import {
   recentSolutions,
   recentSubmissionKeys,
   repoName,
-  type QueuedSubmission,
-} from '@/lib/storage';
-import type { Submission } from '@/lib/submission';
+} from '@/lib/api/storage';
+import type { RuntimeMessage } from '@/lib/types/messages';
+import type { QueuedSubmission, Submission } from '@/lib/types/submission';
+import { errorMessage, isLeetCodeUrl } from '@/lib/utils/helpers';
 
 const RETRY_ALARM = 'retry-pending-submissions';
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
 const MAX_RECENT_KEYS = 1000;
 const MAX_RECENT_SOLUTIONS = 5;
-const BADGE_CLEAR_DELAY_MS = 4000;
-
-const fileSchema = z.object({ sha: z.string() });
-const uploadResponseSchema = z.object({ content: z.object({ html_url: z.string() }) });
 
 let processing = false;
 let queueLock: Promise<unknown> = Promise.resolve();
@@ -53,10 +50,7 @@ export default defineBackground(() => {
   browser.runtime.onStartup.addListener(() => void processQueue());
 });
 
-function handleMessage(
-  message: z.output<typeof runtimeMessageSchema>,
-  sender: Browser.runtime.MessageSender,
-): Promise<void> {
+function handleMessage(message: RuntimeMessage, sender: Browser.runtime.MessageSender): Promise<void> {
   switch (message.type) {
     case 'queue-submission':
       return queueFromLeetCode(message.payload, sender);
@@ -73,10 +67,6 @@ async function queueFromLeetCode(
 ): Promise<void> {
   if (!sender.tab || !isLeetCodeUrl(sender.url)) throw new Error('Submission did not come from LeetCode.');
   if (await enqueue(payload)) await processQueue();
-}
-
-function isLeetCodeUrl(url: string | undefined): boolean {
-  return URL.parse(url ?? '')?.hostname === 'leetcode.com';
 }
 
 function withQueueLock<T>(task: () => Promise<T>): Promise<T> {
@@ -125,7 +115,7 @@ async function processQueue(): Promise<void> {
       await activeUpload.setValue({ problemTitle, difficulty, language, startedAt: Date.now() });
       await setBadge('uploading').catch(() => {});
       try {
-        await markUploaded(item, await pushToGitHub(item.payload));
+        await markUploaded(item, await upload(item.payload));
         saved += 1;
       } catch (error: unknown) {
         await markFailed(item, error);
@@ -176,7 +166,7 @@ async function markFailed(item: QueuedSubmission, error: unknown): Promise<void>
       pendingSubmissions.setValue(queue),
       lastSyncStatus.setValue({
         status: 'retrying',
-        message: `Could not save ${current.payload.problemTitle}: ${errorMessage(error).replace(/\.$/, '')}. It will retry automatically.`,
+        message: errorMessage(error),
         updatedAt: Date.now(),
       }),
     ]);
@@ -195,25 +185,6 @@ async function scheduleRetry(): Promise<void> {
   await browser.alarms.create(RETRY_ALARM, { when: Math.max(Date.now() + 1000, nextAttemptAt) });
 }
 
-// The toolbar badge mirrors the popup: orange while uploading, green briefly after a save,
-// amber with a count while uploads wait to retry.
-let badgeTimer: ReturnType<typeof setTimeout> | undefined;
-
-async function setBadge(state: 'uploading' | 'saved' | 'waiting' | 'clear', waiting = 0): Promise<void> {
-  clearTimeout(badgeTimer);
-  const badges: Record<typeof state, [text: string, color: string]> = {
-    uploading: ['↑', '#FFA116'],
-    saved: ['✓', '#00B8A3'],
-    waiting: [String(waiting), '#F5A524'],
-    clear: ['', '#000000'],
-  };
-  const [text, color] = badges[state];
-  await browser.action.setBadgeBackgroundColor({ color });
-  await browser.action.setBadgeTextColor({ color: '#0A0A0A' });
-  await browser.action.setBadgeText({ text });
-  if (state === 'saved') badgeTimer = setTimeout(() => void browser.action.setBadgeText({ text: '' }), BADGE_CLEAR_DELAY_MS);
-}
-
 function notify(title: string, message: string): void {
   void browser.notifications.create({
     type: 'basic',
@@ -223,8 +194,7 @@ function notify(title: string, message: string): void {
   });
 }
 
-// Returns the URL of the saved file on GitHub.
-async function pushToGitHub(payload: Submission): Promise<string> {
+async function upload(payload: Submission): Promise<string> {
   const [token, repo, branch] = await Promise.all([
     githubToken.getValue(),
     repoName.getValue(),
@@ -232,51 +202,5 @@ async function pushToGitHub(payload: Submission): Promise<string> {
   ]);
   if (!token || !repo) throw new Error('Open extension settings and save a GitHub token and repository.');
   if (!REPOSITORY_PATTERN.test(repo)) throw new Error('Repository must use the OWNER/REPOSITORY format.');
-
-  const fileName = buildFileName(payload);
-  const path = `/repos/${repo}/contents/leetcode/${encodeURIComponent(fileName)}`;
-  const upload = {
-    message: `Add LeetCode solution: ${fileName}`,
-    content: toBase64(buildFileContent(payload)),
-    branch: branch || 'main',
-  };
-
-  try {
-    return fileUrlFrom(await githubRequest(token, path, { method: 'PUT', body: upload }));
-  } catch (error: unknown) {
-    // GitHub answers 422 when the file already exists. It is deleted and re-created; see README.
-    if (!(error instanceof GitHubError && error.status === 422)) throw error;
-
-    const { sha } = fileSchema.parse(await githubRequest(token, path));
-    await githubRequest(token, path, {
-      method: 'DELETE',
-      body: { message: `Delete existing LeetCode solution: ${fileName}`, sha, branch: upload.branch },
-    });
-    return fileUrlFrom(await githubRequest(token, path, { method: 'PUT', body: upload }));
-  }
-
-  function fileUrlFrom(response: unknown): string {
-    const parsed = uploadResponseSchema.safeParse(response);
-    return parsed.success
-      ? parsed.data.content.html_url
-      : `https://github.com/${repo}/blob/${upload.branch}/leetcode/${encodeURIComponent(fileName)}`;
-  }
-}
-
-function buildFileName(payload: Submission): string {
-  const title = payload.problemTitle
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 100);
-  return `${payload.questionId}-${title || 'solution'}.${payload.language.toLowerCase()}`;
-}
-
-function buildFileContent(payload: Submission): string {
-  return `/*\n * ${payload.problemTitle}\n * Difficulty: ${payload.difficulty}\n *\n * ${payload.description}\n */\n\n${payload.code}`;
-}
-
-function toBase64(text: string): string {
-  return btoa(Array.from(new TextEncoder().encode(text), (byte) => String.fromCharCode(byte)).join(''));
+  return uploadSolution(token, repo, branch || 'main', payload);
 }

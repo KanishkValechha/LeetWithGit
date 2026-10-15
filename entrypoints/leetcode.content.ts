@@ -1,10 +1,10 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { z } from 'zod';
-import { leetCodeProfileSchema } from '@/lib/leetcode-profile';
-import { sendMessage } from '@/lib/messages';
-import { PAGE_PROFILE_MESSAGE, PAGE_SUBMISSION_MESSAGE } from '@/lib/page-message';
-import { leetCodeProfile } from '@/lib/storage';
-import { submissionSchema } from '@/lib/submission';
+import { PAGE_PROFILE_MESSAGE, PAGE_SUBMISSION_MESSAGE } from '@/lib/constants';
+import { leetCodeProfileSchema } from '@/lib/schemas/leetcode';
+import { submissionSchema } from '@/lib/schemas/submission';
+import { sendMessage } from '@/lib/api/messages';
+import { leetCodeProfile } from '@/lib/api/storage';
 
 const pageMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal(PAGE_SUBMISSION_MESSAGE), payload: submissionSchema }),

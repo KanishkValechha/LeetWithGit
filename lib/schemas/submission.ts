@@ -9,6 +9,3 @@ export const submissionSchema = z.object({
   description: z.string().max(100_000).default(''),
   code: z.string().min(1).max(500_000),
 });
-
-export type Submission = z.output<typeof submissionSchema>;
-export type SubmissionInput = z.input<typeof submissionSchema>;

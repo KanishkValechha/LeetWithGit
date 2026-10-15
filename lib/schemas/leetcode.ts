@@ -7,5 +7,3 @@ export const leetCodeProfileSchema = z.object({
   solved: countsSchema,
   total: countsSchema,
 });
-
-export type LeetCodeProfile = z.infer<typeof leetCodeProfileSchema>;

@@ -1,9 +1,11 @@
-import { errorMessage } from '@/lib/errors';
-import { REPOSITORY_PATTERN } from '@/lib/github';
-import { sendMessage } from '@/lib/messages';
-import { branchName, githubToken, repoName } from '@/lib/storage';
-import { fetchViewer, listWritableRepositories, NEW_TOKEN_URL, verifyRepository, type Repository, type Viewer } from '../api';
-import { h, icon } from '../dom';
+import { NEW_TOKEN_URL, REPOSITORY_PATTERN } from '@/lib/constants';
+import { fetchViewer, listWritableRepositories, verifyRepository } from '@/lib/api/github';
+import { sendMessage } from '@/lib/api/messages';
+import { branchName, githubToken, repoName } from '@/lib/api/storage';
+import type { Repository, Viewer } from '@/lib/types/github';
+import { errorMessage } from '@/lib/utils/helpers';
+import { h } from '../dom';
+import { icon } from '../icons';
 
 interface SetupState {
   step: 'token' | 'repository';

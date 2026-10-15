@@ -1,6 +1,6 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import type { LeetCodeProfile } from '@/lib/leetcode-profile';
-import { PAGE_PROFILE_MESSAGE, PAGE_SUBMISSION_MESSAGE } from '@/lib/page-message';
+import { PAGE_PROFILE_MESSAGE, PAGE_SUBMISSION_MESSAGE } from '@/lib/constants';
+import type { DifficultyCounts, LeetCodeProfile } from '@/lib/types/leetcode';
 
 interface DifficultyCount {
   difficulty: string;
@@ -48,7 +48,7 @@ async function publishProfile(): Promise<void> {
   window.postMessage({ type: PAGE_PROFILE_MESSAGE, payload: profile }, location.origin);
 }
 
-function byDifficulty(counts: DifficultyCount[]): LeetCodeProfile['solved'] {
+function byDifficulty(counts: DifficultyCount[]): DifficultyCounts {
   const count = (difficulty: string) => counts.find((item) => item.difficulty === difficulty)?.count ?? 0;
   return { easy: count('Easy'), medium: count('Medium'), hard: count('Hard') };
 }

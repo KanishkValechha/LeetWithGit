@@ -1,6 +1,6 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import { PAGE_SUBMISSION_MESSAGE } from '@/lib/page-message';
-import type { SubmissionInput } from '@/lib/submission';
+import { PAGE_SUBMISSION_MESSAGE } from '@/lib/constants';
+import type { SubmissionInput } from '@/lib/types/submission';
 
 interface PendingSubmission {
   questionId: string;

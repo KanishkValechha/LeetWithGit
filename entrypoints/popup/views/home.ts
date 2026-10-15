@@ -1,7 +1,10 @@
-import type { LeetCodeProfile } from '@/lib/leetcode-profile';
-import { sendMessage } from '@/lib/messages';
-import type { ActiveUpload, QueuedSubmission, SavedSolution, SyncStatus } from '@/lib/storage';
-import { difficultyClass, h, icon, languageLabel, timeAgo, timeUntil } from '../dom';
+import { sendMessage } from '@/lib/api/messages';
+import type { LeetCodeProfile } from '@/lib/types/leetcode';
+import type { QueuedSubmission } from '@/lib/types/submission';
+import type { ActiveUpload, SavedSolution, SolutionSummary, SyncStatus } from '@/lib/types/sync';
+import { difficultyClass, languageLabel, problemName, timeAgo, timeUntil } from '@/lib/utils/format';
+import { h } from '../dom';
+import { icon } from '../icons';
 
 export interface HomeData {
   repo: string;
@@ -132,7 +135,7 @@ function savedCard(solution: SavedSolution): HTMLElement {
 
 function waitingCard(queue: QueuedSubmission[], status: SyncStatus | null): HTMLElement {
   const next = Math.min(...queue.map((item) => item.nextAttemptAt));
-  const reason = status?.status === 'retrying' ? failureReason(status.message) : null;
+  const reason = status?.status === 'retrying' ? status.message : null;
   const retry = h(
     'button',
     {
@@ -156,15 +159,7 @@ function waitingCard(queue: QueuedSubmission[], status: SyncStatus | null): HTML
   );
 }
 
-// The stored message reads "Could not save <title>: <reason>. It will retry automatically."
-function failureReason(message: string): string {
-  return message.replace(/^Could not save .*?: /, '').replace(/\. It will retry automatically\.$/, '.');
-}
-
-function activityHead(
-  label: string,
-  { problemTitle, difficulty, language }: { problemTitle: string; difficulty: string; language: string },
-): HTMLElement {
+function activityHead(label: string, { problemTitle, difficulty, language }: SolutionSummary): HTMLElement {
   return h(
     'div',
     { class: 'activity-head' },
@@ -240,11 +235,4 @@ function recentList(solutions: SavedSolution[]): HTMLElement {
       ),
     ),
   );
-}
-
-function problemName(slug: string): string {
-  return slug
-    .split('-')
-    .map((word) => (word ? word[0]!.toUpperCase() + word.slice(1) : word))
-    .join(' ');
 }
