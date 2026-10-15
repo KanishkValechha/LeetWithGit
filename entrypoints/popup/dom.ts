@@ -41,6 +41,18 @@ const ICONS = {
   key: `<svg viewBox="0 0 16 16" ${stroke}><circle cx="5" cy="11" r="2.5"/><path d="M6.8 9.2L13 3M11 5l1.5 1.5"/></svg>`,
 } as const;
 
+export function timeAgo(timestamp: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - timestamp) / 1000));
+  if (seconds < 45) return 'now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d`;
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function timeUntil(timestamp: number, now = Date.now()): string {
   const seconds = Math.round((timestamp - now) / 1000);
   if (seconds <= 5) return 'shortly';

@@ -56,7 +56,7 @@ export default defineWebExtConfig({
 4. Pick the repository from the list (or type `OWNER/REPOSITORY` if the token cannot list repositories) and check the branch.
 5. Select **Connect repository**. It checks token access, repository access, branch existence and push permission before saving. The token is stored in this browser's local extension storage. Repository and branch preferences use Chrome sync storage.
 
-When LeetCode marks a submission accepted, the extension saves it under `leetcode/` in your repository. Temporary network or GitHub errors are queued and retried automatically. The popup shows upload progress while a solution is being committed and queued uploads with a **Retry now** button. The toolbar badge shows ↑ while uploading, ✓ after a save and the number of queued uploads while they wait to retry. Repository, branch and token can be changed under the popup's settings.
+When LeetCode marks a submission accepted, the extension saves it under `leetcode/` in your repository. Temporary network or GitHub errors are queued and retried automatically. The popup shows upload progress while a solution is being committed, queued uploads with a **Retry now** button and your five most recently saved solutions. The toolbar badge shows ↑ while uploading, ✓ after a save and the number of queued uploads while they wait to retry. Repository, branch and token can be changed under the popup's settings.
 
 ## Privacy and permissions
 

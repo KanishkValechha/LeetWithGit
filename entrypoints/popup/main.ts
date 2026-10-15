@@ -5,9 +5,9 @@ import {
   activeUpload,
   branchName,
   githubToken,
-  lastSavedSolution,
   lastSyncStatus,
   pendingSubmissions,
+  recentSolutions,
   repoName,
 } from '@/lib/storage';
 import { h } from './dom';
@@ -61,16 +61,16 @@ async function showSettings(): Promise<void> {
 }
 
 async function loadHomeData(): Promise<HomeData> {
-  const [repo, branch, lastSaved, queue, active, status, tabProblem] = await Promise.all([
+  const [repo, branch, recent, queue, active, status, tabProblem] = await Promise.all([
     repoName.getValue(),
     branchName.getValue(),
-    lastSavedSolution.getValue(),
+    recentSolutions.getValue(),
     pendingSubmissions.getValue(),
     activeUpload.getValue(),
     lastSyncStatus.getValue(),
     currentLeetCodeProblem(),
   ]);
-  return { repo, branch, lastSaved, queue, active, status, tabProblem };
+  return { repo, branch, recent, queue, active, status, tabProblem };
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
@@ -89,8 +89,8 @@ function refreshHome(): void {
   if (screen === 'home') void showHome(false);
 }
 
-for (const item of [pendingSubmissions, activeUpload, lastSavedSolution, lastSyncStatus]) item.watch(refreshHome);
-// Keeps retry countdowns current while the popup stays open.
+for (const item of [pendingSubmissions, activeUpload, recentSolutions, lastSyncStatus]) item.watch(refreshHome);
+// Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
 
 start().catch((error: unknown) => {

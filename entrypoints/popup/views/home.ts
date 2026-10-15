@@ -1,11 +1,11 @@
 import { sendMessage } from '@/lib/messages';
 import type { ActiveUpload, QueuedSubmission, SavedSolution, SyncStatus } from '@/lib/storage';
-import { difficultyClass, h, icon, languageLabel, timeUntil } from '../dom';
+import { difficultyClass, h, icon, languageLabel, timeAgo, timeUntil } from '../dom';
 
 export interface HomeData {
   repo: string;
   branch: string;
-  lastSaved: SavedSolution | null;
+  recent: SavedSolution[];
   queue: QueuedSubmission[];
   active: ActiveUpload | null;
   status: SyncStatus | null;
@@ -21,6 +21,9 @@ let celebratedAt = 0;
 
 export function homeView(data: HomeData, { onSettings }: { onSettings: () => void }): HTMLElement {
   const activity = activityCard(data);
+  const content = data.recent.length
+    ? [activity ?? idleRow(data.tabProblem), recentList(data.recent)]
+    : [activity ?? allSet(), !activity && leetCodeButton(data.tabProblem)];
 
   return h(
     'div',
@@ -36,7 +39,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
       ),
     ),
     repoStrip(data.repo, data.branch),
-    h('div', { class: 'home-body stagger' }, activity ?? allSet(), !activity && leetCodeButton(data.tabProblem)),
+    h('div', { class: 'home-body stagger' }, ...content),
   );
 }
 
@@ -44,7 +47,8 @@ function activityCard(data: HomeData): HTMLElement | null {
   const now = Date.now();
   if (data.active && now - data.active.startedAt < STALE_UPLOAD_MS) return uploadingCard(data.active);
   if (data.queue.length) return waitingCard(data.queue, data.status);
-  if (data.lastSaved && now - data.lastSaved.savedAt < JUST_SAVED_MS) return savedCard(data.lastSaved);
+  const [latest] = data.recent;
+  if (latest && now - latest.savedAt < JUST_SAVED_MS) return savedCard(latest);
   return null;
 }
 
@@ -78,6 +82,17 @@ function leetCodeButton(tabProblem: string | null): HTMLElement {
     { class: 'button secondary', href: 'https://leetcode.com/problemset/', target: '_blank' },
     'Open LeetCode',
     icon('external', 'icon-sm'),
+  );
+}
+
+function idleRow(tabProblem: string | null): HTMLElement {
+  return h(
+    'div',
+    { class: 'idle-row' },
+    h('span', { class: 'idle-icon' }, icon(tabProblem ? 'eye' : 'check', 'icon-sm')),
+    tabProblem
+      ? h('span', null, 'Watching ', h('strong', null, problemName(tabProblem)))
+      : h('span', null, 'Ready for your next accepted solution'),
   );
 }
 
@@ -153,6 +168,33 @@ function activityHead(
       { class: 'meta' },
       h('span', { class: `difficulty ${difficultyClass(difficulty)}` }, difficulty),
       h('span', { class: 'mono dim' }, languageLabel(language)),
+    ),
+  );
+}
+
+function recentList(solutions: SavedSolution[]): HTMLElement {
+  const now = Date.now();
+  return h(
+    'section',
+    { class: 'recent' },
+    h('h2', { class: 'section-label' }, 'Recent'),
+    h(
+      'ul',
+      { class: 'recent-list' },
+      ...solutions.map((solution) =>
+        h(
+          'li',
+          null,
+          h(
+            'a',
+            { class: 'recent-row', href: solution.fileUrl, target: '_blank', title: 'Open on GitHub' },
+            h('span', { class: `tick ${difficultyClass(solution.difficulty)}` }),
+            h('span', { class: 'recent-title' }, solution.problemTitle),
+            h('span', { class: 'recent-lang mono' }, languageLabel(solution.language)),
+            h('span', { class: 'recent-time mono' }, timeAgo(solution.savedAt, now)),
+          ),
+        ),
+      ),
     ),
   );
 }

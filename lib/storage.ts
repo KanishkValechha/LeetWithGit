@@ -32,7 +32,7 @@ export const pendingSubmissions = storage.defineItem<QueuedSubmission[]>('local:
 export const recentSubmissionKeys = storage.defineItem<string[]>('local:recentSubmissionKeys', { fallback: [] });
 export const lastSyncStatus = storage.defineItem<SyncStatus>('local:lastSyncStatus');
 export const activeUpload = storage.defineItem<ActiveUpload | null>('local:activeUpload', { fallback: null });
-export const lastSavedSolution = storage.defineItem<SavedSolution | null>('local:lastSavedSolution', { fallback: null });
+export const recentSolutions = storage.defineItem<SavedSolution[]>('local:recentSolutions', { fallback: [] });
 
 // Versions before 1.6 stored the token in sync storage.
 const legacySyncedToken = storage.defineItem<string>('sync:githubToken');

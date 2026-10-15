@@ -8,10 +8,10 @@ import {
   activeUpload,
   branchName,
   githubToken,
-  lastSavedSolution,
   lastSyncStatus,
   migrateLegacyToken,
   pendingSubmissions,
+  recentSolutions,
   recentSubmissionKeys,
   repoName,
   type QueuedSubmission,
@@ -21,6 +21,7 @@ import type { Submission } from '@/lib/submission';
 const RETRY_ALARM = 'retry-pending-submissions';
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
 const MAX_RECENT_KEYS = 1000;
+const MAX_RECENT_SOLUTIONS = 5;
 const BADGE_CLEAR_DELAY_MS = 4000;
 
 const fileSchema = z.object({ sha: z.string() });
@@ -147,11 +148,16 @@ async function markUploaded(item: QueuedSubmission, fileUrl: string): Promise<vo
   const { problemTitle, difficulty, language } = item.payload;
   const message = `Saved ${problemTitle} to GitHub.`;
   await withQueueLock(async () => {
-    const [queue, recent] = await Promise.all([pendingSubmissions.getValue(), recentSubmissionKeys.getValue()]);
+    const [queue, recent, solutions] = await Promise.all([
+      pendingSubmissions.getValue(),
+      recentSubmissionKeys.getValue(),
+      recentSolutions.getValue(),
+    ]);
+    const saved = { problemTitle, difficulty, language, fileUrl, savedAt: Date.now() };
     await Promise.all([
       pendingSubmissions.setValue(queue.filter((queued) => queued.submissionKey !== item.submissionKey)),
       recentSubmissionKeys.setValue([...recent, item.submissionKey].slice(-MAX_RECENT_KEYS)),
-      lastSavedSolution.setValue({ problemTitle, difficulty, language, fileUrl, savedAt: Date.now() }),
+      recentSolutions.setValue([saved, ...solutions].slice(0, MAX_RECENT_SOLUTIONS)),
       lastSyncStatus.setValue({ status: 'success', message, updatedAt: Date.now() }),
     ]);
   });

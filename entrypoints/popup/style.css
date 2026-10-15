@@ -354,7 +354,7 @@ label { font-size: 12px; font-weight: 500; color: var(--muted); }
   color: var(--muted);
   font-size: 12px;
 }
-.watching-note strong { color: var(--text); font-weight: 550; }
+.watching-note strong, .idle-row strong { color: var(--text); font-weight: 550; }
 
 .enter .draw .logo-path { stroke-dasharray: 50; animation: draw 600ms 120ms var(--ease) both; }
 .enter .draw .logo-node { animation: pop 300ms 120ms var(--ease) both; }
@@ -363,6 +363,27 @@ label { font-size: 12px; font-weight: 500; color: var(--muted); }
 @keyframes draw { from { stroke-dashoffset: 50; } to { stroke-dashoffset: 0; } }
 @keyframes pop { from { transform: scale(0); } }
 .logo-node, .logo-head { transform-box: fill-box; transform-origin: center; }
+
+.idle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.idle-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgb(44 187 93 / 0.12);
+  color: var(--accepted);
+}
 
 /* Activity cards */
 .activity {
@@ -453,6 +474,35 @@ label { font-size: 12px; font-weight: 500; color: var(--muted); }
   font-size: 12px;
 }
 .activity-foot { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+
+/* Recent */
+.recent { display: grid; gap: 6px; }
+.section-label {
+  padding: 0 2px;
+  font: 500 10.5px 'Geist Mono', monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.recent-list { margin: 0 -6px; padding: 0; list-style: none; }
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  transition: background 120ms;
+}
+.recent-row:hover { background: var(--surface); }
+.tick { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--dim); }
+.tick.easy { background: var(--easy); }
+.tick.medium { background: var(--medium); }
+.tick.hard { background: var(--hard); }
+.recent-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-lang { color: var(--dim); font-size: 11.5px; }
+.recent-time { width: 26px; color: var(--dim); font-size: 11.5px; text-align: right; }
 
 /* Settings */
 .settings-body { display: grid; gap: 16px; padding: 18px 16px 16px; }
