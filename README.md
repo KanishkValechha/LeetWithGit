@@ -52,11 +52,11 @@ export default defineWebExtConfig({
 
 1. Create a repository for your LeetCode solutions, or use an existing repository. The selected branch must already exist.
 2. Create a GitHub fine-grained personal access token. Limit it to the repository that will receive solutions and grant **Contents: Read and write**. The token is used by this extension to check repository access and write solution files.
-3. Open the extension popup and enter the token, repository as `OWNER/REPOSITORY`, and branch (usually `main`).
-4. Select **Test connection**. It checks token access, repository access, and branch existence. This read-only check cannot prove write permission; the token still needs **Contents: Read and write**.
-5. Select **Save settings**. The token is stored in this browser's local extension storage. Repository and branch preferences use Chrome sync storage.
+3. Open the extension popup, paste the token and select **Continue**.
+4. Pick the repository from the list (or type `OWNER/REPOSITORY` if the token cannot list repositories) and check the branch.
+5. Select **Connect repository**. It checks token access, repository access, branch existence and push permission before saving. The token is stored in this browser's local extension storage. Repository and branch preferences use Chrome sync storage.
 
-When LeetCode marks a submission accepted, the extension saves it under `leetcode/` in your repository. Temporary network or GitHub errors are queued and retried automatically. The popup shows the latest sync result.
+When LeetCode marks a submission accepted, the extension saves it under `leetcode/` in your repository. Temporary network or GitHub errors are queued and retried automatically. The popup shows upload progress while a solution is being committed and queued uploads with a **Retry now** button. The toolbar badge shows ↑ while uploading, ✓ after a save and the number of queued uploads while they wait to retry. Repository, branch and token can be changed under the popup's settings.
 
 ## Privacy and permissions
 
