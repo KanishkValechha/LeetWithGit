@@ -24,7 +24,7 @@ let screen: Screen = 'setup';
 
 function mount(view: Node, animate = true): void {
   // Live refreshes that change nothing visible would only restart running animations.
-  if (!animate && root!.firstChild?.textContent === view.textContent) return;
+  if (!animate && root!.firstChild?.isEqualNode(view)) return;
   root!.replaceChildren(view);
   root!.classList.toggle('enter', animate);
 }
