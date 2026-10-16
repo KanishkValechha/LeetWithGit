@@ -23,9 +23,13 @@ export default defineContentScript({
   matches: ['https://leetcode.com/*'],
   world: 'MAIN',
   main() {
+    const profileWindow = window as Window & { __leetWithGitProfileInitialized?: boolean };
     const refresh = () =>
       publishProfile().catch((error: unknown) => console.error('LeetWithGit could not load your LeetCode stats:', error));
     void refresh();
+    // Reinjection refreshes stats, but the page needs only one submission listener.
+    if (profileWindow.__leetWithGitProfileInitialized) return;
+    profileWindow.__leetWithGitProfileInitialized = true;
     // An accepted submission changes the solved counts.
     window.addEventListener('message', (event: MessageEvent<{ type?: unknown } | null>) => {
       if (event.source === window && event.data?.type === PAGE_SUBMISSION_MESSAGE) void refresh();

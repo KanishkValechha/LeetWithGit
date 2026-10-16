@@ -61,11 +61,12 @@ async function injectIntoOpenLeetCodeTabs(firstInstall: boolean): Promise<void> 
     tabs.map(async ({ id: tabId }) => {
       if (tabId === undefined) return;
       await browser.scripting.executeScript({ target: { tabId }, files: ['/content-scripts/leetcode.js'] });
-      // After an update the page-world scripts are still running, so only the relay needs injecting.
-      if (!firstInstall) return;
+      // The capture hook survives updates; refresh the profile after reconnecting the relay.
       await browser.scripting.executeScript({
         target: { tabId },
-        files: ['/content-scripts/capture.js', '/content-scripts/profile.js'],
+        files: firstInstall
+          ? ['/content-scripts/capture.js', '/content-scripts/profile.js']
+          : ['/content-scripts/profile.js'],
         world: 'MAIN',
       });
     }),
