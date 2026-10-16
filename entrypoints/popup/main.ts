@@ -1,117 +1,100 @@
-import { z } from 'zod';
-import { errorMessage } from '@/lib/errors';
-import { githubRequest, REPOSITORY_PATTERN } from '@/lib/github';
-import { sendMessage } from '@/lib/messages';
-import { branchName, githubToken, lastSyncStatus, repoName, type SyncStatus } from '@/lib/storage';
+import './style.css';
+import { browser } from 'wxt/browser';
+import {
+  activeUpload,
+  branchName,
+  githubToken,
+  lastSyncStatus,
+  leetCodeProfile,
+  pendingSubmissions,
+  recentSolutions,
+  repoName,
+} from '@/lib/api/storage';
+import { errorMessage } from '@/lib/utils/helpers';
+import { h } from './dom';
+import { homeView, type HomeData } from './views/home';
+import { settingsView } from './views/settings';
+import { setupView } from './views/setup';
 
-type StatusTone = 'success' | 'error' | 'neutral';
+type Screen = 'setup' | 'home' | 'settings';
 
-const TOKEN_SAVED = 'A token is saved on this browser. Leave this field blank to keep it.';
-const TOKEN_MISSING = 'No token saved yet. It is kept on this browser and is not synced.';
+const root = document.getElementById('app');
+if (!root) throw new Error('Popup root is missing.');
+let screen: Screen = 'setup';
 
-const repositorySchema = z.object({
-  permissions: z.object({ push: z.boolean() }).partial().optional(),
-});
-
-const tokenInput = element('github-token', HTMLInputElement);
-const repoInput = element('repo-name', HTMLInputElement);
-const branchInput = element('branch-name', HTMLInputElement);
-const tokenState = element('token-state', HTMLElement);
-const statusElement = element('status', HTMLElement);
-const syncStatusElement = element('sync-status', HTMLElement);
-const buttons = [element('save', HTMLButtonElement), element('test-connection', HTMLButtonElement)] as const;
-
-buttons[0].addEventListener('click', () => void saveSettings());
-buttons[1].addEventListener('click', () => void testConnection());
-lastSyncStatus.watch(renderSyncStatus);
-loadSettings().catch((error: unknown) => showStatus(`Could not load settings: ${errorMessage(error)}`, 'error'));
-
-function element<T extends HTMLElement>(id: string, type: new () => T): T {
-  const found = document.getElementById(id);
-  if (!(found instanceof type)) throw new Error(`Popup element "${id}" is missing.`);
-  return found;
+function mount(view: Node, animate = true): void {
+  // Live refreshes that change nothing visible would only restart running animations.
+  if (!animate && root!.firstChild?.isEqualNode(view)) return;
+  root!.replaceChildren(view);
+  root!.classList.toggle('enter', animate);
 }
 
-async function loadSettings(): Promise<void> {
-  const [token, repo, branch, syncStatus] = await Promise.all([
-    githubToken.getValue(),
+async function start(): Promise<void> {
+  const [token, repo] = await Promise.all([githubToken.getValue(), repoName.getValue()]);
+  if (token && repo) await showHome();
+  else showSetup();
+}
+
+function showSetup(): void {
+  screen = 'setup';
+  mount(setupView({ onConnected: () => void showHome() }));
+}
+
+async function showHome(animate = true): Promise<void> {
+  screen = 'home';
+  const data = await loadHomeData();
+  if (screen !== 'home') return;
+  mount(homeView(data, { onSettings: () => void showSettings() }), animate);
+}
+
+async function showSettings(): Promise<void> {
+  screen = 'settings';
+  const [token, repo, branch] = await Promise.all([githubToken.getValue(), repoName.getValue(), branchName.getValue()]);
+  mount(
+    settingsView(
+      { token, repo, branch },
+      {
+        onBack: () => void showHome(),
+        onDisconnected: showSetup,
+      },
+    ),
+  );
+}
+
+async function loadHomeData(): Promise<HomeData> {
+  const [repo, branch, recent, profile, queue, active, status, tabProblem] = await Promise.all([
     repoName.getValue(),
     branchName.getValue(),
+    recentSolutions.getValue(),
+    leetCodeProfile.getValue(),
+    pendingSubmissions.getValue(),
+    activeUpload.getValue(),
     lastSyncStatus.getValue(),
+    currentLeetCodeProblem(),
   ]);
-  repoInput.value = repo;
-  branchInput.value = branch;
-  tokenState.textContent = token ? TOKEN_SAVED : TOKEN_MISSING;
-  renderSyncStatus(syncStatus);
+  return { repo, branch, recent, profile, queue, active, status, tabProblem };
 }
 
-function readForm(): { token: string; repo: string; branch: string } | null {
-  const repo = repoInput.value.trim();
-  if (!REPOSITORY_PATTERN.test(repo)) {
-    showStatus('Enter a repository as OWNER/REPOSITORY.', 'error');
+// The extension has host access to leetcode.com, so the active tab's URL is visible there.
+async function currentLeetCodeProblem(): Promise<string | null> {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = URL.parse(tab?.url ?? '');
+    if (url?.hostname !== 'leetcode.com') return null;
+    return url.pathname.match(/^\/problems\/([^/]+)/)?.[1] ?? null;
+  } catch {
     return null;
   }
-  return { token: tokenInput.value.trim(), repo, branch: branchInput.value.trim() || 'main' };
 }
 
-async function saveSettings(): Promise<void> {
-  const form = readForm();
-  if (!form) return;
-  if (!form.token && !(await githubToken.getValue())) {
-    showStatus('Add a GitHub token before saving settings.', 'error');
-    return;
-  }
-
-  await whileBusy('Could not save settings', async () => {
-    if (form.token) await githubToken.setValue(form.token);
-    await Promise.all([repoName.setValue(form.repo), branchName.setValue(form.branch)]);
-    tokenInput.value = '';
-    tokenState.textContent = TOKEN_SAVED;
-    showStatus('Settings saved. Testing the connection is recommended.', 'success');
-    sendMessage({ type: 'process-queue' }).catch(() => {});
-  });
+function refreshHome(): void {
+  if (screen === 'home') void showHome(false);
 }
 
-async function testConnection(): Promise<void> {
-  const form = readForm();
-  if (!form) return;
-  const token = form.token || (await githubToken.getValue());
-  if (!token) {
-    showStatus('Enter a GitHub token to test the connection.', 'error');
-    return;
-  }
+for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus]) item.watch(refreshHome);
+// Keeps relative times and retry countdowns current while the popup stays open.
+setInterval(refreshHome, 10_000);
 
-  await whileBusy('Connection check failed', async () => {
-    showStatus('Checking token, repository, and branch…', 'neutral');
-    const repository = repositorySchema.parse(await githubRequest(token, `/repos/${form.repo}`));
-    await githubRequest(token, `/repos/${form.repo}/branches/${encodeURIComponent(form.branch)}`);
-    if (repository.permissions?.push === false) {
-      throw new Error('The token can read this repository but does not have write access.');
-    }
-    showStatus(
-      `Connection works. Repository and branch “${form.branch}” are accessible. Confirm the token has Contents: Read and write to upload solutions.`,
-      'success',
-    );
-  });
-}
-
-async function whileBusy(failurePrefix: string, task: () => Promise<void>): Promise<void> {
-  for (const button of buttons) button.disabled = true;
-  try {
-    await task();
-  } catch (error: unknown) {
-    showStatus(`${failurePrefix}: ${errorMessage(error)}`, 'error');
-  } finally {
-    for (const button of buttons) button.disabled = false;
-  }
-}
-
-function renderSyncStatus(syncStatus: SyncStatus | null): void {
-  syncStatusElement.textContent = syncStatus ? `Latest sync: ${syncStatus.message}` : '';
-  syncStatusElement.className = `status ${syncStatus?.status === 'success' ? 'success' : 'neutral'}`;
-}
-
-function showStatus(message: string, tone: StatusTone): void {
-  statusElement.textContent = message;
-  statusElement.className = `status ${tone}`;
-}
+start().catch((error: unknown) => {
+  mount(h('p', { class: 'fatal' }, `Could not load LeetWithGit: ${errorMessage(error)}`));
+});

@@ -1,28 +1,32 @@
 import { browser, type Browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { z } from 'zod';
-import { errorMessage } from '@/lib/errors';
-import { GitHubError, githubRequest, REPOSITORY_PATTERN } from '@/lib/github';
-import { runtimeMessageSchema } from '@/lib/messages';
+import { REPOSITORY_PATTERN } from '@/lib/constants';
+import { runtimeMessageSchema } from '@/lib/schemas/messages';
+import { setBadge } from '@/lib/api/badge';
+import { uploadSolution } from '@/lib/api/github';
 import {
+  activeUpload,
   branchName,
   githubToken,
   lastSyncStatus,
   migrateLegacyToken,
   pendingSubmissions,
+  recentSolutions,
   recentSubmissionKeys,
   repoName,
-  type QueuedSubmission,
-} from '@/lib/storage';
-import type { Submission } from '@/lib/submission';
+} from '@/lib/api/storage';
+import type { RuntimeMessage } from '@/lib/types/messages';
+import type { QueuedSubmission, Submission } from '@/lib/types/submission';
+import { errorMessage, isLeetCodeUrl } from '@/lib/utils/helpers';
 
 const RETRY_ALARM = 'retry-pending-submissions';
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
 const MAX_RECENT_KEYS = 1000;
-
-const fileSchema = z.object({ sha: z.string() });
+const MAX_RECENT_SOLUTIONS = 5;
 
 let processing = false;
+// Set when processQueue is called mid-run, e.g. by Retry now, so newly due items are not left for the alarm.
+let rerunQueue = false;
 let queueLock: Promise<unknown> = Promise.resolve();
 
 export default defineBackground(() => {
@@ -30,11 +34,7 @@ export default defineBackground(() => {
     const message = runtimeMessageSchema.safeParse(raw);
     if (!message.success) return false;
 
-    const task =
-      message.data.type === 'queue-submission'
-        ? queueFromLeetCode(message.data.payload, sender)
-        : processQueue();
-    task
+    handleMessage(message.data, sender)
       .catch((error: unknown) => console.error('LeetWithGit could not handle a message:', error))
       .finally(() => sendResponse());
     return true;
@@ -44,13 +44,45 @@ export default defineBackground(() => {
     if (alarm.name === RETRY_ALARM) void processQueue();
   });
 
-  browser.runtime.onInstalled.addListener(async () => {
+  browser.runtime.onInstalled.addListener(async ({ reason }) => {
     await migrateLegacyToken();
+    await injectIntoOpenLeetCodeTabs(reason === 'install');
     await processQueue();
   });
 
   browser.runtime.onStartup.addListener(() => void processQueue());
 });
+
+// LeetCode tabs opened before an install or update keep running without our scripts, or with a relay
+// the update cut off, so their accepted solutions would not be saved until the page is refreshed.
+async function injectIntoOpenLeetCodeTabs(firstInstall: boolean): Promise<void> {
+  const tabs = await browser.tabs.query({ url: 'https://leetcode.com/*' });
+  await Promise.allSettled(
+    tabs.map(async ({ id: tabId }) => {
+      if (tabId === undefined) return;
+      await browser.scripting.executeScript({ target: { tabId }, files: ['/content-scripts/leetcode.js'] });
+      // The capture hook survives updates; refresh the profile after reconnecting the relay.
+      await browser.scripting.executeScript({
+        target: { tabId },
+        files: firstInstall
+          ? ['/content-scripts/capture.js', '/content-scripts/profile.js']
+          : ['/content-scripts/profile.js'],
+        world: 'MAIN',
+      });
+    }),
+  );
+}
+
+function handleMessage(message: RuntimeMessage, sender: Browser.runtime.MessageSender): Promise<void> {
+  switch (message.type) {
+    case 'queue-submission':
+      return queueFromLeetCode(message.payload, sender);
+    case 'retry-now':
+      return retryNow();
+    case 'process-queue':
+      return processQueue();
+  }
+}
 
 async function queueFromLeetCode(
   payload: Submission,
@@ -58,10 +90,6 @@ async function queueFromLeetCode(
 ): Promise<void> {
   if (!sender.tab || !isLeetCodeUrl(sender.url)) throw new Error('Submission did not come from LeetCode.');
   if (await enqueue(payload)) await processQueue();
-}
-
-function isLeetCodeUrl(url: string | undefined): boolean {
-  return URL.parse(url ?? '')?.hostname === 'leetcode.com';
 }
 
 function withQueueLock<T>(task: () => Promise<T>): Promise<T> {
@@ -88,35 +116,66 @@ async function submissionKeyFor(payload: Submission): Promise<string> {
   return `sha256:${Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
+async function retryNow(): Promise<void> {
+  await withQueueLock(async () => {
+    const queue = await pendingSubmissions.getValue();
+    await pendingSubmissions.setValue(queue.map((item) => ({ ...item, nextAttemptAt: Date.now() })));
+  });
+  await processQueue();
+}
+
 async function processQueue(): Promise<void> {
-  if (processing) return;
+  if (processing) {
+    rerunQueue = true;
+    return;
+  }
   processing = true;
+  rerunQueue = false;
+  let attempted = 0;
+  let saved = 0;
   try {
     const now = Date.now();
     const due = (await pendingSubmissions.getValue()).filter((item) => item.nextAttemptAt <= now);
+    attempted = due.length;
     for (const item of due) {
+      const { problemTitle, difficulty, language } = item.payload;
+      await activeUpload.setValue({ problemTitle, difficulty, language, startedAt: Date.now() });
+      await setBadge('uploading').catch(() => {});
       try {
-        await pushToGitHub(item.payload);
-        await markUploaded(item);
+        await markUploaded(item, await upload(item.payload));
+        saved += 1;
       } catch (error: unknown) {
         await markFailed(item, error);
       }
     }
   } finally {
     processing = false;
+    await activeUpload.setValue(null);
+    const waiting = (await pendingSubmissions.getValue()).length;
+    if (attempted || waiting) {
+      await setBadge(waiting ? 'waiting' : saved ? 'saved' : 'clear', waiting).catch(() => {});
+    }
     await scheduleRetry().catch((error: unknown) => {
       console.error('LeetWithGit could not schedule queued uploads:', error);
     });
   }
+  if (rerunQueue) await processQueue();
 }
 
-async function markUploaded(item: QueuedSubmission): Promise<void> {
-  const message = `Saved ${item.payload.problemTitle} to GitHub.`;
+async function markUploaded(item: QueuedSubmission, fileUrl: string): Promise<void> {
+  const { problemTitle, difficulty, language } = item.payload;
+  const message = `Saved ${problemTitle} to GitHub.`;
   await withQueueLock(async () => {
-    const [queue, recent] = await Promise.all([pendingSubmissions.getValue(), recentSubmissionKeys.getValue()]);
+    const [queue, recent, solutions] = await Promise.all([
+      pendingSubmissions.getValue(),
+      recentSubmissionKeys.getValue(),
+      recentSolutions.getValue(),
+    ]);
+    const saved = { problemTitle, difficulty, language, fileUrl, savedAt: Date.now() };
     await Promise.all([
       pendingSubmissions.setValue(queue.filter((queued) => queued.submissionKey !== item.submissionKey)),
       recentSubmissionKeys.setValue([...recent, item.submissionKey].slice(-MAX_RECENT_KEYS)),
+      recentSolutions.setValue([saved, ...solutions].slice(0, MAX_RECENT_SOLUTIONS)),
       lastSyncStatus.setValue({ status: 'success', message, updatedAt: Date.now() }),
     ]);
   });
@@ -135,7 +194,7 @@ async function markFailed(item: QueuedSubmission, error: unknown): Promise<void>
       pendingSubmissions.setValue(queue),
       lastSyncStatus.setValue({
         status: 'retrying',
-        message: `Could not save ${current.payload.problemTitle}: ${errorMessage(error).replace(/\.$/, '')}. It will retry automatically.`,
+        message: errorMessage(error),
         updatedAt: Date.now(),
       }),
     ]);
@@ -163,7 +222,7 @@ function notify(title: string, message: string): void {
   });
 }
 
-async function pushToGitHub(payload: Submission): Promise<void> {
+async function upload(payload: Submission): Promise<string> {
   const [token, repo, branch] = await Promise.all([
     githubToken.getValue(),
     repoName.getValue(),
@@ -171,44 +230,5 @@ async function pushToGitHub(payload: Submission): Promise<void> {
   ]);
   if (!token || !repo) throw new Error('Open extension settings and save a GitHub token and repository.');
   if (!REPOSITORY_PATTERN.test(repo)) throw new Error('Repository must use the OWNER/REPOSITORY format.');
-
-  const fileName = buildFileName(payload);
-  const path = `/repos/${repo}/contents/leetcode/${encodeURIComponent(fileName)}`;
-  const upload = {
-    message: `Add LeetCode solution: ${fileName}`,
-    content: toBase64(buildFileContent(payload)),
-    branch: branch || 'main',
-  };
-
-  try {
-    await githubRequest(token, path, { method: 'PUT', body: upload });
-  } catch (error: unknown) {
-    // GitHub answers 422 when the file already exists. It is deleted and re-created; see README.
-    if (!(error instanceof GitHubError && error.status === 422)) throw error;
-
-    const { sha } = fileSchema.parse(await githubRequest(token, path));
-    await githubRequest(token, path, {
-      method: 'DELETE',
-      body: { message: `Delete existing LeetCode solution: ${fileName}`, sha, branch: upload.branch },
-    });
-    await githubRequest(token, path, { method: 'PUT', body: upload });
-  }
-}
-
-function buildFileName(payload: Submission): string {
-  const title = payload.problemTitle
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 100);
-  return `${payload.questionId}-${title || 'solution'}.${payload.language.toLowerCase()}`;
-}
-
-function buildFileContent(payload: Submission): string {
-  return `/*\n * ${payload.problemTitle}\n * Difficulty: ${payload.difficulty}\n *\n * ${payload.description}\n */\n\n${payload.code}`;
-}
-
-function toBase64(text: string): string {
-  return btoa(Array.from(new TextEncoder().encode(text), (byte) => String.fromCharCode(byte)).join(''));
+  return uploadSolution(token, repo, branch || 'main', payload);
 }

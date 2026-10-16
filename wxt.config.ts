@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'LeetWithGit',
     description: 'Automatically push successful LeetCode solutions to GitHub',
-    permissions: ['storage', 'notifications', 'alarms'],
+    permissions: ['storage', 'notifications', 'alarms', 'scripting'],
     host_permissions: ['https://leetcode.com/*', 'https://api.github.com/*'],
     ...(browser === 'firefox' && {
       browser_specific_settings: {
