@@ -35,10 +35,13 @@ export async function githubRequest(
 }
 
 function describeFailure(status: number, data: unknown): string {
-  if (status === 401) return 'GitHub rejected the token. Check that it is active.';
-  if (status === 404) return 'Repository or branch was not found, or the token cannot access it.';
   const parsed = errorResponseSchema.safeParse(data);
-  return parsed.success ? parsed.data.message : `GitHub returned HTTP ${status}.`;
+  const message = parsed.success ? parsed.data.message : `GitHub returned HTTP ${status}.`;
+  if (status === 401) return 'GitHub rejected the token. Check that it is active.';
+  // Rate limits also answer 403, and their message already explains itself.
+  if (status === 403 && !/rate limit/i.test(message)) return 'GitHub denied the request. The token needs Contents: Read and write.';
+  if (status === 404) return 'Repository or branch was not found, or the token cannot access it.';
+  return message;
 }
 
 export async function fetchViewer(token: string): Promise<Viewer> {

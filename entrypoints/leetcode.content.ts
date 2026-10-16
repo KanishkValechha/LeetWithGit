@@ -8,7 +8,7 @@ import { leetCodeProfile } from '@/lib/api/storage';
 
 const pageMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal(PAGE_SUBMISSION_MESSAGE), payload: submissionSchema }),
-  z.object({ type: z.literal(PAGE_PROFILE_MESSAGE), payload: leetCodeProfileSchema }),
+  z.object({ type: z.literal(PAGE_PROFILE_MESSAGE), payload: leetCodeProfileSchema.nullable() }),
 ]);
 
 // Relays what the page-world scripts collect: submissions go to the background, profile stats to storage.

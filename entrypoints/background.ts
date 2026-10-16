@@ -25,6 +25,8 @@ const MAX_RECENT_KEYS = 1000;
 const MAX_RECENT_SOLUTIONS = 5;
 
 let processing = false;
+// Set when processQueue is called mid-run, e.g. by Retry now, so newly due items are not left for the alarm.
+let rerunQueue = false;
 let queueLock: Promise<unknown> = Promise.resolve();
 
 export default defineBackground(() => {
@@ -102,8 +104,12 @@ async function retryNow(): Promise<void> {
 }
 
 async function processQueue(): Promise<void> {
-  if (processing) return;
+  if (processing) {
+    rerunQueue = true;
+    return;
+  }
   processing = true;
+  rerunQueue = false;
   let attempted = 0;
   let saved = 0;
   try {
@@ -132,6 +138,7 @@ async function processQueue(): Promise<void> {
       console.error('LeetWithGit could not schedule queued uploads:', error);
     });
   }
+  if (rerunQueue) await processQueue();
 }
 
 async function markUploaded(item: QueuedSubmission, fileUrl: string): Promise<void> {

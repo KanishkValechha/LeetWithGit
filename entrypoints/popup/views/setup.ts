@@ -124,7 +124,7 @@ export function setupView({ onConnected }: { onConnected: () => void }): HTMLEle
         h(
           'div',
           { class: 'account' },
-          h('img', { class: 'avatar', src: `${state.viewer.avatar_url}&s=48`, alt: '' }),
+          h('img', { class: 'avatar', src: avatarUrl(state.viewer.avatar_url), alt: '' }),
           h('span', { class: 'mono' }, `@${state.viewer.login}`),
           h(
             'button',
@@ -236,4 +236,10 @@ function stepper(step: SetupState['step']): HTMLElement {
     h('li', { class: 'step-line' + (done ? ' done' : '') }),
     h('li', { class: done ? 'current' : '' }, h('span', { class: 'step-dot' }, '2'), 'Repository'),
   );
+}
+
+function avatarUrl(url: string): string {
+  const avatar = new URL(url);
+  avatar.searchParams.set('s', '48');
+  return avatar.href;
 }
