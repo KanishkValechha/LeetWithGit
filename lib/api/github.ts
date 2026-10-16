@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { errorResponseSchema, fileSchema, repositorySchema, uploadResponseSchema, viewerSchema } from '../schemas/github';
-import type { Repository, Viewer } from '../types/github';
+import type { RepositoryPage, Viewer } from '../types/github';
 import type { Submission } from '../types/submission';
 import { toBase64 } from '../utils/helpers';
 import { buildFileContent, buildFileName } from '../utils/solution-file';
+
+const REPOSITORIES_PER_PAGE = 100;
 
 export class GitHubError extends Error {
   constructor(
@@ -48,12 +50,16 @@ export async function fetchViewer(token: string): Promise<Viewer> {
   return viewerSchema.parse(await githubRequest(token, '/user'));
 }
 
+// Recently pushed first, so the repository someone wants is usually on the first page.
 // A fine-grained token only lists the repositories it was granted.
-export async function listWritableRepositories(token: string): Promise<Repository[]> {
-  const repositories = z
+export async function listWritableRepositories(token: string, page = 1): Promise<RepositoryPage> {
+  const batch = z
     .array(repositorySchema)
-    .parse(await githubRequest(token, '/user/repos?per_page=100&sort=pushed'));
-  return repositories.filter((repository) => repository.permissions?.push !== false);
+    .parse(await githubRequest(token, `/user/repos?per_page=${REPOSITORIES_PER_PAGE}&sort=pushed&page=${page}`));
+  return {
+    repositories: batch.filter((repository) => repository.permissions?.push !== false),
+    next: batch.length === REPOSITORIES_PER_PAGE ? page + 1 : null,
+  };
 }
 
 export async function verifyRepository(token: string, repo: string, branch: string): Promise<void> {

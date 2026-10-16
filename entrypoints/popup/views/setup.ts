@@ -2,19 +2,18 @@ import { NEW_TOKEN_URL, REPOSITORY_PATTERN } from '@/lib/constants';
 import { fetchViewer, listWritableRepositories, verifyRepository } from '@/lib/api/github';
 import { sendMessage } from '@/lib/api/messages';
 import { branchName, githubToken, repoName } from '@/lib/api/storage';
-import type { Repository, Viewer } from '@/lib/types/github';
+import type { Viewer } from '@/lib/types/github';
 import { errorMessage } from '@/lib/utils/helpers';
 import { h } from '../dom';
 import { icon } from '../icons';
+import { repositoryPicker } from './repo-picker';
 
 interface SetupState {
   step: 'token' | 'repository';
   token: string;
   viewer: Viewer | null;
-  repositories: Repository[];
   repo: string;
   branch: string;
-  filter: string;
   busy: boolean;
   error: string;
 }
@@ -24,13 +23,13 @@ export function setupView({ onConnected }: { onConnected: () => void }): HTMLEle
     step: 'token',
     token: '',
     viewer: null,
-    repositories: [],
     repo: '',
     branch: 'main',
-    filter: '',
     busy: false,
     error: '',
   };
+  // Kept outside state so loaded pages and the filter survive re-renders.
+  let picker: HTMLElement | null = null;
   const body = h('div', { class: 'setup-body' });
   const hero = h(
     'div',
@@ -90,15 +89,24 @@ export function setupView({ onConnected }: { onConnected: () => void }): HTMLEle
     if (!state.token) return update({ error: 'Paste a token to continue.' });
     update({ busy: true, error: '' });
     try {
-      const viewer = await fetchViewer(state.token);
-      const repositories = await listWritableRepositories(state.token).catch(() => []);
-      const first = repositories[0];
+      const { token } = state;
+      const viewer = await fetchViewer(token);
+      const first = await listWritableRepositories(token).catch(() => null);
+      const [top] = first?.repositories ?? [];
+      picker =
+        first && (top || first.next)
+          ? repositoryPicker({
+              first,
+              loadPage: (page) => listWritableRepositories(token, page),
+              selected: top?.full_name ?? '',
+              onSelect: (repository) => update({ repo: repository.full_name, branch: repository.default_branch, error: '' }),
+            })
+          : null;
       update({
         step: 'repository',
         viewer,
-        repositories,
-        repo: first?.full_name ?? '',
-        branch: first?.default_branch ?? 'main',
+        repo: top?.full_name ?? '',
+        branch: top?.default_branch ?? 'main',
         busy: false,
       });
     } catch (error: unknown) {
@@ -136,53 +144,12 @@ export function setupView({ onConnected }: { onConnected: () => void }): HTMLEle
         'div',
         { class: 'field' },
         h('label', { for: 'repo' }, 'Repository'),
-        state.repositories.length ? repositoryPicker() : repositoryInput(),
+        picker ?? repositoryInput(),
       ),
       h('div', { class: 'field' }, h('label', { for: 'branch' }, 'Branch'), branchInput),
       state.error && h('p', { class: 'field-error', role: 'alert' }, state.error),
       submitButton(state.busy ? 'Verifying' : 'Connect repository'),
     );
-  }
-
-  function repositoryPicker(): HTMLElement {
-    const visible = state.repositories.filter((repository) =>
-      repository.full_name.toLowerCase().includes(state.filter.toLowerCase()),
-    );
-    const list = h(
-      'div',
-      { class: 'picker-list', role: 'radiogroup', 'aria-label': 'Repository' },
-      ...visible.map((repository) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            role: 'radio',
-            class: 'picker-row',
-            'aria-checked': String(repository.full_name === state.repo),
-            onclick: () => update({ repo: repository.full_name, branch: repository.default_branch, error: '' }),
-          },
-          h('span', { class: 'radio' }),
-          h('span', { class: 'picker-name mono' }, repository.full_name),
-          repository.private && icon('lock', 'icon-xs dim'),
-        ),
-      ),
-      !visible.length && h('p', { class: 'picker-empty' }, 'No matches'),
-    );
-
-    if (state.repositories.length <= 4) return h('div', { class: 'picker' }, list);
-
-    const filter = h('input', {
-      class: 'picker-filter mono',
-      placeholder: 'Filter repositories',
-      autocomplete: 'off',
-      spellcheck: 'false',
-    });
-    filter.value = state.filter;
-    filter.addEventListener('input', () => {
-      update({ filter: filter.value }, false);
-      list.replaceWith(repositoryPicker().querySelector('.picker-list')!);
-    });
-    return h('div', { class: 'picker' }, filter, list);
   }
 
   function repositoryInput(): HTMLElement {

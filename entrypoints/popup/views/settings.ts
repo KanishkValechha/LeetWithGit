@@ -1,11 +1,13 @@
 import { browser } from 'wxt/browser';
 import { NEW_TOKEN_URL, REPOSITORY_PATTERN } from '@/lib/constants';
-import { verifyRepository } from '@/lib/api/github';
+import { listWritableRepositories, verifyRepository } from '@/lib/api/github';
 import { sendMessage } from '@/lib/api/messages';
 import { branchName, githubToken, repoName } from '@/lib/api/storage';
 import { errorMessage, maskToken } from '@/lib/utils/helpers';
 import { h } from '../dom';
 import { icon } from '../icons';
+import { repositoryPicker } from './repo-picker';
+
 interface Settings {
   token: string | null;
   repo: string;
@@ -16,7 +18,8 @@ export function settingsView(
   current: Settings,
   { onBack, onDisconnected }: { onBack: () => void; onDisconnected: () => void },
 ): HTMLElement {
-  const repoInput = textInput('repo', current.repo, 'owner/repository');
+  let repo = current.repo;
+  const repoField = h('div');
   const branchInput = textInput('branch', current.branch, 'main');
   const tokenInput = h('input', {
     id: 'token',
@@ -34,9 +37,47 @@ export function settingsView(
     feedback.replaceChildren(icon(tone === 'success' ? 'check' : 'retry', 'icon-xs'), message);
   }
 
+  function showRepo(): void {
+    repoField.replaceChildren(
+      h(
+        'div',
+        { class: 'repo-current' },
+        h('span', { class: 'mono', title: repo }, repo || 'No repository'),
+        h('button', { type: 'button', class: 'link', onclick: () => void chooseRepo() }, 'Change'),
+      ),
+    );
+  }
+
+  // Lists what the token can write to, so nobody has to remember OWNER/REPOSITORY.
+  async function chooseRepo(): Promise<void> {
+    const token = tokenInput.value.trim() || current.token;
+    if (!token) return show('Add a GitHub token.', 'error');
+    feedback.replaceChildren();
+    repoField.replaceChildren(h('div', { class: 'repo-current dim' }, h('span', { class: 'spinner sm' }), 'Loading repositories'));
+    try {
+      const first = await listWritableRepositories(token);
+      if (!first.repositories.length && !first.next) throw new Error('This token cannot write to any repository.');
+      repoField.replaceChildren(
+        repositoryPicker({
+          first,
+          loadPage: (page) => listWritableRepositories(token, page),
+          selected: repo,
+          onSelect: (repository) => {
+            repo = repository.full_name;
+            branchInput.value = repository.default_branch;
+            showRepo();
+          },
+        }),
+      );
+      repoField.querySelector('input')?.focus();
+    } catch (error: unknown) {
+      showRepo();
+      show(errorMessage(error), 'error');
+    }
+  }
+
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
-    const repo = repoInput.value.trim();
     const branch = branchInput.value.trim() || 'main';
     const token = tokenInput.value.trim() || current.token;
     if (!REPOSITORY_PATTERN.test(repo)) return show('Use the owner/repository format.', 'error');
@@ -64,6 +105,7 @@ export function settingsView(
     onDisconnected();
   }
 
+  showRepo();
   return h(
     'div',
     { class: 'screen settings' },
@@ -81,7 +123,7 @@ export function settingsView(
     h(
       'form',
       { class: 'settings-body stagger', onsubmit: (event: Event) => void submit(event) },
-      h('div', { class: 'field' }, h('label', { for: 'repo' }, 'Repository'), repoInput),
+      h('div', { class: 'field' }, h('label', null, 'Repository'), repoField),
       h('div', { class: 'field' }, h('label', { for: 'branch' }, 'Branch'), branchInput),
       h(
         'div',
