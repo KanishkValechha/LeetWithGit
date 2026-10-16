@@ -64,7 +64,7 @@ When LeetCode marks a submission accepted, the extension saves it under `leetcod
 - It checks repository/branch access and sends the solution and problem metadata to the repository configured in the popup.
 - While you are signed in on `leetcode.com`, it reads your username and solved counts from LeetCode to show them in the popup. They are kept in local extension storage.
 - Your GitHub token is stored in local extension storage and is not copied into Chrome sync settings.
-- The extension needs LeetCode page access, GitHub API access, storage, notifications, and alarms for queued retries.
+- The extension needs LeetCode page access, GitHub API access, storage, notifications, alarms for queued retries, and scripting to reconnect LeetCode tabs that were open during an install or update.
 
 ## Known overwrite behavior
 
@@ -81,6 +81,7 @@ Every push to `main` and every pull request type-checks the code and builds the 
 | `storage` | Save the token locally and sync repository/branch preferences |
 | `notifications` | Report successful uploads and queued failures |
 | `alarms` | Retry queued uploads while the service worker is suspended |
+| `scripting` | Reconnect LeetCode tabs that were already open when the extension was installed or updated |
 | `leetcode.com` host access | Observe LeetCode submissions and retrieve problem details and your solved counts |
 | `api.github.com` host access | Check configuration and upload solution files |
 

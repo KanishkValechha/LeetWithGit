@@ -44,13 +44,33 @@ export default defineBackground(() => {
     if (alarm.name === RETRY_ALARM) void processQueue();
   });
 
-  browser.runtime.onInstalled.addListener(async () => {
+  browser.runtime.onInstalled.addListener(async ({ reason }) => {
     await migrateLegacyToken();
+    await injectIntoOpenLeetCodeTabs(reason === 'install');
     await processQueue();
   });
 
   browser.runtime.onStartup.addListener(() => void processQueue());
 });
+
+// LeetCode tabs opened before an install or update keep running without our scripts, or with a relay
+// the update cut off, so their accepted solutions would not be saved until the page is refreshed.
+async function injectIntoOpenLeetCodeTabs(firstInstall: boolean): Promise<void> {
+  const tabs = await browser.tabs.query({ url: 'https://leetcode.com/*' });
+  await Promise.allSettled(
+    tabs.map(async ({ id: tabId }) => {
+      if (tabId === undefined) return;
+      await browser.scripting.executeScript({ target: { tabId }, files: ['/content-scripts/leetcode.js'] });
+      // After an update the page-world scripts are still running, so only the relay needs injecting.
+      if (!firstInstall) return;
+      await browser.scripting.executeScript({
+        target: { tabId },
+        files: ['/content-scripts/capture.js', '/content-scripts/profile.js'],
+        world: 'MAIN',
+      });
+    }),
+  );
+}
 
 function handleMessage(message: RuntimeMessage, sender: Browser.runtime.MessageSender): Promise<void> {
   switch (message.type) {
