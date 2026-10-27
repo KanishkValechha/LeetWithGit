@@ -25,6 +25,8 @@ const MAX_RECENT_KEYS = 1000;
 const MAX_RECENT_SOLUTIONS = 5;
 // Notification IDs carry the GitHub URL of a saved solution, so a click can open it after a worker restart.
 const OPEN_URL_PREFIX = 'open-url:';
+// Chrome rejects notification IDs longer than this.
+const MAX_NOTIFICATION_ID_LENGTH = 500;
 
 let processing = false;
 // Set when processQueue is called mid-run, e.g. by Retry now, so newly due items are not left for the alarm.
@@ -222,7 +224,9 @@ async function scheduleRetry(): Promise<void> {
 }
 
 function notify(title: string, message: string, openUrl?: string): void {
-  void browser.notifications.create(openUrl ? `${OPEN_URL_PREFIX}${openUrl}` : crypto.randomUUID(), {
+  const openId = openUrl && `${OPEN_URL_PREFIX}${openUrl}`;
+  const id = openId && openId.length <= MAX_NOTIFICATION_ID_LENGTH ? openId : crypto.randomUUID();
+  void browser.notifications.create(id, {
     type: 'basic',
     iconUrl: browser.runtime.getURL('/icon/128.png'),
     title,
