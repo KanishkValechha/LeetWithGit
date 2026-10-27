@@ -23,6 +23,10 @@ const RETRY_ALARM = 'retry-pending-submissions';
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
 const MAX_RECENT_KEYS = 1000;
 const MAX_RECENT_SOLUTIONS = 5;
+// Notification IDs carry the GitHub URL of a saved solution, so a click can open it after a worker restart.
+const OPEN_URL_PREFIX = 'open-url:';
+// Chrome rejects notification IDs longer than this.
+const MAX_NOTIFICATION_ID_LENGTH = 500;
 
 let processing = false;
 // Set when processQueue is called mid-run, e.g. by Retry now, so newly due items are not left for the alarm.
@@ -42,6 +46,12 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === RETRY_ALARM) void processQueue();
+  });
+
+  browser.notifications.onClicked.addListener((notificationId) => {
+    if (!notificationId.startsWith(OPEN_URL_PREFIX)) return;
+    void browser.notifications.clear(notificationId);
+    void browser.tabs.create({ url: notificationId.slice(OPEN_URL_PREFIX.length) });
   });
 
   browser.runtime.onInstalled.addListener(async ({ reason }) => {
@@ -179,7 +189,7 @@ async function markUploaded(item: QueuedSubmission, fileUrl: string): Promise<vo
       lastSyncStatus.setValue({ status: 'success', message, updatedAt: Date.now() }),
     ]);
   });
-  notify('LeetWithGit', message);
+  notify('LeetWithGit', message, fileUrl);
 }
 
 async function markFailed(item: QueuedSubmission, error: unknown): Promise<void> {
@@ -213,8 +223,10 @@ async function scheduleRetry(): Promise<void> {
   await browser.alarms.create(RETRY_ALARM, { when: Math.max(Date.now() + 1000, nextAttemptAt) });
 }
 
-function notify(title: string, message: string): void {
-  void browser.notifications.create({
+function notify(title: string, message: string, openUrl?: string): void {
+  const openId = openUrl && `${OPEN_URL_PREFIX}${openUrl}`;
+  const id = openId && openId.length <= MAX_NOTIFICATION_ID_LENGTH ? openId : crypto.randomUUID();
+  void browser.notifications.create(id, {
     type: 'basic',
     iconUrl: browser.runtime.getURL('/icon/128.png'),
     title,
