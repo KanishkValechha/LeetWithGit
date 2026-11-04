@@ -90,7 +90,8 @@ async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      query: '{ activeDailyCodingChallengeQuestion { question { titleSlug status } } userStatus { currentDayStreak } }',
+      query:
+        '{ activeDailyCodingChallengeQuestion { question { titleSlug } userStatus } }',
     }),
     credentials: 'include',
     signal: AbortSignal.timeout(3000),
@@ -99,24 +100,69 @@ async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; 
 
   const result = (await response.json()) as {
     data?: {
-      activeDailyCodingChallengeQuestion?: { question?: { titleSlug?: string; status?: string } | null } | null;
-      userStatus?: { currentDayStreak?: number } | null;
+      activeDailyCodingChallengeQuestion?: {
+        question?: { titleSlug?: string } | null;
+        userStatus?: string | null;
+      } | null;
     };
     errors?: { message: string }[];
   };
-  // GraphQL reports failures with HTTP 200 and an errors array instead of data.
   if (result.errors?.length || !result.data) throw new Error(result.errors?.[0]?.message ?? 'Daily question lookup failed.');
 
   const slug = result.data.activeDailyCodingChallengeQuestion?.question?.titleSlug;
-  const streak = result.data.userStatus?.currentDayStreak ?? 0;
-  const status = result.data.activeDailyCodingChallengeQuestion?.question?.status;
-  const isCompleted = status === 'ac';
+  const completionStatus = result.data.activeDailyCodingChallengeQuestion?.userStatus;
+  const isCompleted = completionStatus === 'ac' || completionStatus === 'AC';
 
   const url = typeof slug === 'string' && /^[a-z0-9-]+$/i.test(slug)
     ? `https://leetcode.com/problems/${encodeURIComponent(slug)}/description/`
     : DAILY_QUESTION_FALLBACK;
 
+  // Fetch streak from panelQuestionList
+  let streak = 0;
+  if (slug) {
+    streak = await fetchDailyStreakFromPanel(slug).catch(() => 0);
+  }
+
   return { url, streak, isCompleted };
+}
+
+async function fetchDailyStreakFromPanel(currentQuestionSlug: string): Promise<number> {
+  const today = new Date().toISOString().split('T')[0];
+  const response = await fetch('https://leetcode.com/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `query panelQuestionList($currentQuestionSlug: String!, $envId: String, $envType: String) {
+        panelQuestionList(
+          currentQuestionSlug: $currentQuestionSlug
+          envId: $envId
+          envType: $envType
+        ) {
+          finishedLength
+        }
+      }`,
+      variables: {
+        currentQuestionSlug,
+        envId: today,
+        envType: 'daily-question',
+      },
+    }),
+    credentials: 'include',
+    signal: AbortSignal.timeout(3000),
+  });
+
+  if (!response.ok) throw new Error(`Streak lookup failed (${response.status}).`);
+
+  const result = (await response.json()) as {
+    data?: {
+      panelQuestionList?: { finishedLength?: number } | null;
+    };
+    errors?: { message: string }[];
+  };
+
+  if (result.errors?.length) throw new Error(result.errors[0]?.message ?? 'Streak lookup failed.');
+
+  return result.data?.panelQuestionList?.finishedLength ?? 0;
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
