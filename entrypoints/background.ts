@@ -282,12 +282,12 @@ async function fetchAndCacheDailyQuestion(): Promise<void> {
   }
 
   console.log('[LeetWithGit] Fetching daily question for UTC day:', utcDay);
-  lastDailyFetchDay = utcDay;
 
   try {
     const data = await fetchDailyQuestionData();
     await dailyQuestionData.setValue(data);
     console.log('[LeetWithGit] Daily question cached:', data);
+    lastDailyFetchDay = utcDay;
 
     // Update badge after caching
     if (data && !data.isCompleted) {
@@ -318,6 +318,7 @@ async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; 
       query: '{ activeDailyCodingChallengeQuestion { question { titleSlug title difficulty questionFrontendId } userStatus } }',
     }),
     credentials: 'include',
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) throw new Error(`Daily question lookup failed (${response.status}).`);
@@ -378,6 +379,7 @@ async function fetchDailyStreakFromPanel(currentQuestionSlug: string): Promise<n
       },
     }),
     credentials: 'include',
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) throw new Error(`Streak lookup failed (${response.status}).`);

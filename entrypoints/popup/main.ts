@@ -87,12 +87,12 @@ async function loadHomeData(): Promise<HomeData> {
     active,
     status,
     tabProblem,
-    dailyQuestionUrl,
+    dailyQuestionUrl: data?.url ?? DAILY_QUESTION_FALLBACK,
     dailyQuestionTitle: data?.title,
     dailyQuestionNumber: data?.questionNumber,
     dailyQuestionDifficulty: data?.difficulty,
-    currentStreak,
-    isDailyQuestionCompleted
+    currentStreak: data?.streak ?? 0,
+    isDailyQuestionCompleted: data?.isCompleted ?? false
   };
 }
 
@@ -112,21 +112,9 @@ function refreshHome(): void {
   if (screen === 'home') void showHome(false);
 }
 
-for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus]) item.watch(refreshHome);
+for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus, dailyQuestionData]) item.watch(refreshHome);
 // Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
-
-dailyQuestionData.getValue().then((data) => {
-  if (data) {
-    dailyQuestionUrl = data.url;
-    currentStreak = data.streak;
-    isDailyQuestionCompleted = data.isCompleted;
-    console.log('[LeetWithGit] Loaded daily question from storage:', data);
-  } else {
-    console.log('[LeetWithGit] No daily question data in storage');
-  }
-  refreshHome();
-});
 
 start().catch((error: unknown) => {
   mount(h('p', { class: 'fatal' }, `Could not load LeetWithGit: ${errorMessage(error)}`));
