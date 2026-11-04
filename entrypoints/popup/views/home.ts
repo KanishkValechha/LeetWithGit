@@ -16,6 +16,9 @@ export interface HomeData {
   status: SyncStatus | null;
   tabProblem: string | null;
   dailyQuestionUrl: string;
+  dailyQuestionTitle: string | undefined;
+  dailyQuestionNumber: string | undefined;
+  dailyQuestionDifficulty: string | undefined;
   currentStreak: number;
   isDailyQuestionCompleted: boolean;
 }
@@ -44,7 +47,12 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
     h(
       'header',
       { class: 'bar' },
-      h('div', { class: 'brand' }, icon('logo', 'logo-sm'), h('span', null, 'Leet', h('span', { class: 'brand-with' }, 'with'), 'Git')),
+      h(
+        'div',
+        { class: 'brand' },
+        icon('logo', 'logo-sm'),
+        h('span', null, 'Leet', h('span', { class: 'brand-with' }, 'with'), 'Git'),
+      ),
       h(
         'button',
         { class: 'icon-button', type: 'button', title: 'Settings', 'aria-label': 'Settings', onclick: onSettings },
@@ -52,7 +60,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
       ),
     ),
     repoStrip(data.repo, data.branch),
-    h('div', { class: 'home-body stagger' }, ...content, streakBadge(data.currentStreak), dailyQuestionButton(data.dailyQuestionUrl, data.isDailyQuestionCompleted)),
+    h('div', { class: 'home-body stagger' }, ...content, streakBadge(data.currentStreak), dailyQuestionButton(data.dailyQuestionUrl, data.isDailyQuestionCompleted, data.dailyQuestionNumber, data.dailyQuestionDifficulty)),
   );
 }
 
@@ -95,12 +103,28 @@ function streakBadge(streak: number): HTMLElement {
   );
 }
 
-function dailyQuestionButton(url: string, isCompleted: boolean): HTMLElement {
+function dailyQuestionButton(url: string, isCompleted: boolean, questionNumber?: string, difficulty?: string): HTMLElement {
+  const difficultyColor = {
+    'EASY': '#00b8a9',
+    'MEDIUM': '#ffa500',
+    'HARD': '#ff375f',
+  }[difficulty?.toUpperCase()] || '#ffffff';
+
   return h(
     'a',
-    { class: `button secondary${!isCompleted ? ' has-notification' : ''}`, href: url, target: '_blank', rel: 'noopener noreferrer' },
-    !isCompleted && h('span', { class: 'notification-badge', 'aria-hidden': 'true' }, '●'),
-    "Today's Daily Question",
+    {
+      class: 'button secondary',
+      href: url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    },
+    isCompleted
+      ? 'Nice going! 🎉'
+      : [
+          'Solve todays lc daily ',
+          questionNumber && h('span', { style: `color: ${difficultyColor}` }, `#${questionNumber}`),
+          !questionNumber && "Today's Daily Question",
+        ],
     icon('external', 'icon-sm'),
   );
 }

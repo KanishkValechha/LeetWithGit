@@ -12,6 +12,7 @@ export const lastSyncStatus = storage.defineItem<SyncStatus>('local:lastSyncStat
 export const activeUpload = storage.defineItem<ActiveUpload | null>('local:activeUpload', { fallback: null });
 export const recentSolutions = storage.defineItem<SavedSolution[]>('local:recentSolutions', { fallback: [] });
 export const leetCodeProfile = storage.defineItem<LeetCodeProfile | null>('local:leetCodeProfile', { fallback: null });
+export const dailyQuestionData = storage.defineItem<{ url: string; streak: number; isCompleted: boolean; title?: string; difficulty?: string; questionNumber?: string } | null>('local:dailyQuestionData', { fallback: null });
 
 // Versions before 1.6 stored the token in sync storage.
 const legacySyncedToken = storage.defineItem<string>('sync:githubToken');
