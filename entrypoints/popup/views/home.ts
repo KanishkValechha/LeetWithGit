@@ -104,11 +104,12 @@ function streakBadge(streak: number): HTMLElement {
 }
 
 function dailyQuestionButton(url: string, isCompleted: boolean, questionNumber?: string, difficulty?: string): HTMLElement {
-  const difficultyColor = {
-    'EASY': '#00b8a9',
-    'MEDIUM': '#ffa500',
-    'HARD': '#ff375f',
-  }[difficulty?.toUpperCase()] || '#ffffff';
+  const difficultyColors: Record<string, string> = {
+    EASY: '#00b8a9',
+    MEDIUM: '#ffa500',
+    HARD: '#ff375f',
+  };
+  const difficultyColor = (difficulty && difficultyColors[difficulty.toUpperCase()]) || '#ffffff';
 
   const content = isCompleted
     ? ['Nice going! 🎉 ', icon('external', 'icon-sm')]

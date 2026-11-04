@@ -361,7 +361,14 @@ async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; 
     });
   }
 
-  return { url, streak, isCompleted, title, difficulty, questionNumber };
+  return {
+    url,
+    streak,
+    isCompleted,
+    ...(title !== undefined && { title }),
+    ...(difficulty !== undefined && { difficulty }),
+    ...(questionNumber !== undefined && { questionNumber }),
+  };
 }
 
 async function fetchDailyStreakFromPanel(currentQuestionSlug: string): Promise<number> {
