@@ -21,6 +21,9 @@ type Screen = 'setup' | 'home' | 'settings';
 const root = document.getElementById('app');
 if (!root) throw new Error('Popup root is missing.');
 let screen: Screen = 'setup';
+const DAILY_QUESTION_FALLBACK = 'https://leetcode.com/problemset/';
+let dailyQuestionUrlPromise: Promise<string> | null = null;
+let dailyQuestionUrl = DAILY_QUESTION_FALLBACK;
 
 function mount(view: Node, animate = true): void {
   // Live refreshes that change nothing visible would only restart running animations.
@@ -72,7 +75,31 @@ async function loadHomeData(): Promise<HomeData> {
     lastSyncStatus.getValue(),
     currentLeetCodeProblem(),
   ]);
-  return { repo, branch, recent, profile, queue, active, status, tabProblem };
+  return { repo, branch, recent, profile, queue, active, status, tabProblem, dailyQuestionUrl };
+}
+
+function currentDailyQuestionUrl(): Promise<string> {
+  dailyQuestionUrlPromise ??= fetchDailyQuestionUrl().catch(() => DAILY_QUESTION_FALLBACK);
+  return dailyQuestionUrlPromise;
+}
+
+async function fetchDailyQuestionUrl(): Promise<string> {
+  const response = await fetch('https://leetcode.com/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: 'query questionOfToday { activeDailyCodingChallengeQuestion { question { titleSlug } } }',
+    }),
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!response.ok) throw new Error(`Daily question lookup failed (${response.status}).`);
+
+  const result = (await response.json()) as {
+    data?: { activeDailyCodingChallengeQuestion?: { question?: { titleSlug?: string } | null } | null };
+  };
+  const slug = result.data?.activeDailyCodingChallengeQuestion?.question?.titleSlug;
+  if (typeof slug !== 'string' || !/^[a-z0-9-]+$/i.test(slug)) return DAILY_QUESTION_FALLBACK;
+  return `https://leetcode.com/problems/${encodeURIComponent(slug)}/description/`;
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
@@ -94,6 +121,11 @@ function refreshHome(): void {
 for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus]) item.watch(refreshHome);
 // Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
+
+void currentDailyQuestionUrl().then((url) => {
+  dailyQuestionUrl = url;
+  refreshHome();
+});
 
 start().catch((error: unknown) => {
   mount(h('p', { class: 'fatal' }, `Could not load LeetWithGit: ${errorMessage(error)}`));
