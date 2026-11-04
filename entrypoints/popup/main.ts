@@ -21,6 +21,11 @@ type Screen = 'setup' | 'home' | 'settings';
 const root = document.getElementById('app');
 if (!root) throw new Error('Popup root is missing.');
 let screen: Screen = 'setup';
+const DAILY_QUESTION_FALLBACK = 'https://leetcode.com/problemset/';
+let dailyQuestionUrlPromise: Promise<{ url: string; streak: number; isCompleted: boolean } | null> | null = null;
+let dailyQuestionUrl = DAILY_QUESTION_FALLBACK;
+let currentStreak = 0;
+let isDailyQuestionCompleted = false;
 
 function mount(view: Node, animate = true): void {
   // Live refreshes that change nothing visible would only restart running animations.
@@ -72,7 +77,45 @@ async function loadHomeData(): Promise<HomeData> {
     lastSyncStatus.getValue(),
     currentLeetCodeProblem(),
   ]);
-  return { repo, branch, recent, profile, queue, active, status, tabProblem };
+  return { repo, branch, recent, profile, queue, active, status, tabProblem, dailyQuestionUrl, currentStreak, isDailyQuestionCompleted };
+}
+
+function currentDailyQuestionUrl(): Promise<{ url: string; streak: number; isCompleted: boolean } | null> {
+  dailyQuestionUrlPromise ??= fetchDailyQuestionData().catch(() => null);
+  return dailyQuestionUrlPromise;
+}
+
+async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; isCompleted: boolean } | null> {
+  const response = await fetch('https://leetcode.com/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: '{ activeDailyCodingChallengeQuestion { question { titleSlug status } } userStatus { currentDayStreak } }',
+    }),
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!response.ok) throw new Error(`Daily question lookup failed (${response.status}).`);
+
+  const result = (await response.json()) as {
+    data?: {
+      activeDailyCodingChallengeQuestion?: { question?: { titleSlug?: string; status?: string } | null } | null;
+      userStatus?: { currentDayStreak?: number } | null;
+    };
+    errors?: { message: string }[];
+  };
+  // GraphQL reports failures with HTTP 200 and an errors array instead of data.
+  if (result.errors?.length || !result.data) throw new Error(result.errors?.[0]?.message ?? 'Daily question lookup failed.');
+
+  const slug = result.data.activeDailyCodingChallengeQuestion?.question?.titleSlug;
+  const streak = result.data.userStatus?.currentDayStreak ?? 0;
+  const status = result.data.activeDailyCodingChallengeQuestion?.question?.status;
+  const isCompleted = status === 'ac';
+
+  const url = typeof slug === 'string' && /^[a-z0-9-]+$/i.test(slug)
+    ? `https://leetcode.com/problems/${encodeURIComponent(slug)}/description/`
+    : DAILY_QUESTION_FALLBACK;
+
+  return { url, streak, isCompleted };
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
@@ -94,6 +137,15 @@ function refreshHome(): void {
 for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus]) item.watch(refreshHome);
 // Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
+
+void currentDailyQuestionUrl().then((data) => {
+  if (data) {
+    dailyQuestionUrl = data.url;
+    currentStreak = data.streak;
+    isDailyQuestionCompleted = data.isCompleted;
+  }
+  refreshHome();
+});
 
 start().catch((error: unknown) => {
   mount(h('p', { class: 'fatal' }, `Could not load LeetWithGit: ${errorMessage(error)}`));
