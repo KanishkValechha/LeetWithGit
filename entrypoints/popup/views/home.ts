@@ -99,7 +99,7 @@ function dailyQuestionButton(url: string, isCompleted: boolean): HTMLElement {
   return h(
     'a',
     { class: `button secondary${!isCompleted ? ' has-notification' : ''}`, href: url, target: '_blank', rel: 'noopener noreferrer' },
-    !isCompleted && h('span', { class: 'notification-badge' }, '●'),
+    !isCompleted && h('span', { class: 'notification-badge', 'aria-hidden': 'true' }, '●'),
     "Today's Daily Question",
     icon('external', 'icon-sm'),
   );

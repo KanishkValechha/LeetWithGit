@@ -92,6 +92,7 @@ async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; 
     body: JSON.stringify({
       query: '{ activeDailyCodingChallengeQuestion { question { titleSlug status } } userStatus { currentDayStreak } }',
     }),
+    credentials: 'include',
     signal: AbortSignal.timeout(3000),
   });
   if (!response.ok) throw new Error(`Daily question lookup failed (${response.status}).`);
