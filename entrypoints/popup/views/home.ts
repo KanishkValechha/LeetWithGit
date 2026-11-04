@@ -111,13 +111,15 @@ function dailyQuestionButton(url: string, isCompleted: boolean, questionNumber?:
   }[difficulty?.toUpperCase()] || '#ffffff';
 
   const content = isCompleted
-    ? 'Nice going! 🎉'
+    ? ['Nice going! 🎉 ', icon('external', 'icon-sm')]
     : questionNumber
       ? [
           'Solve todays lc daily ',
           h('span', { style: `color: ${difficultyColor}` }, `#${questionNumber}`),
+          ' ',
+          icon('external', 'icon-sm'),
         ]
-      : "Today's Daily Question";
+      : ["Today's Daily Question", ' ', icon('external', 'icon-sm')];
 
   return h(
     'a',
@@ -127,8 +129,7 @@ function dailyQuestionButton(url: string, isCompleted: boolean, questionNumber?:
       target: '_blank',
       rel: 'noopener noreferrer',
     },
-    ...(Array.isArray(content) ? content : [content]),
-    icon('external', 'icon-sm'),
+    ...content,
   );
 }
 

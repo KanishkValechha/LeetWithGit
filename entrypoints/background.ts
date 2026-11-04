@@ -284,7 +284,14 @@ async function fetchAndCacheDailyQuestion(): Promise<void> {
   console.log('[LeetWithGit] Fetching daily question for UTC day:', utcDay);
 
   try {
-    const data = await fetchDailyQuestionData();
+    const newData = await fetchDailyQuestionData();
+    const storedData = await dailyQuestionData.getValue();
+
+    // Preserve local completion state if already marked complete for this question
+    const data = storedData && storedData.isCompleted && storedData.url === newData.url
+      ? { ...newData, isCompleted: true }
+      : newData;
+
     await dailyQuestionData.setValue(data);
     console.log('[LeetWithGit] Daily question cached:', data);
     lastDailyFetchDay = utcDay;

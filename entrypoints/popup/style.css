@@ -39,7 +39,7 @@
 
 /* Set on body: Chrome gives extension pages a default body font that would override :root. */
 body {
-  width: 360px;
+  width: 100%;
   font: 13px/1.45 'Geist', ui-sans-serif, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 200px;
@@ -80,6 +80,7 @@ button, input { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   height: 48px;
   padding: 0 10px 0 16px;
   border-bottom: 1px solid var(--border);
@@ -313,6 +314,7 @@ label { font-size: 12px; font-weight: 500; color: var(--muted); }
   display: flex;
   align-items: center;
   gap: 9px;
+  width: 100%;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   color: var(--muted);
