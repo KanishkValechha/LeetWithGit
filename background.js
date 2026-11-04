@@ -22,6 +22,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+chrome.notifications.onClicked.addListener(async (notificationId) => {
+  const stored = await chrome.storage.local.get(notificationId);
+  const blobUrl = stored[notificationId];
+  if (typeof blobUrl !== "string" || !blobUrl.startsWith("https://github.com/")) return;
+
+  await chrome.storage.local.remove(notificationId);
+  await chrome.tabs.create({ url: blobUrl });
+});
+
 function injectedScript() {
 
 function interceptFetch() {
@@ -246,12 +255,21 @@ if (!response.ok) {
 
 console.log("Successfully pushed to GitHub");
 
-    // Chrome notification
-    chrome.notifications.create({
+    // GitHub returns the browser URL for the file created by the contents API.
+    const returnedUrl = responseData.content?.html_url;
+    const blobUrl = typeof returnedUrl === "string" && returnedUrl.startsWith("https://github.com/")
+      ? returnedUrl
+      : `https://github.com/${settings.repoName}/blob/${encodeURIComponent(settings.branchName || "main")}/leetcode/${encodeURIComponent(fileName)}`;
+
+    // Persist before showing the notification so even an immediate click has
+    // a destination, and keep it across service worker restarts.
+    const notificationId = `published-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await chrome.storage.local.set({ [notificationId]: blobUrl });
+    await chrome.notifications.create(notificationId, {
       type: "basic",
       iconUrl: "icon48.png",
       title: "LeetWithGit",
-      message: `Successfully pushed ${payload.problemTitle} to GitHub!`,
+      message: `Saved ${payload.problemTitle} to GitHub. Click to view the file.`,
     });
   } catch (error) {
     console.error("GitHub push error:", error);
