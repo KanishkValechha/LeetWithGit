@@ -15,6 +15,9 @@ export interface HomeData {
   active: ActiveUpload | null;
   status: SyncStatus | null;
   tabProblem: string | null;
+  dailyQuestionUrl: string;
+  currentStreak: number;
+  isDailyQuestionCompleted: boolean;
 }
 
 const JUST_SAVED_MS = 45_000;
@@ -33,7 +36,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
           data.profile && statsBlock(data.profile),
           data.recent.length > 0 && recentList(data.recent),
         ]
-      : [activity ?? allSet(), !activity && leetCodeButton(data.tabProblem)];
+      : [activity ?? allSet()];
 
   return h(
     'div',
@@ -49,7 +52,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
       ),
     ),
     repoStrip(data.repo, data.branch),
-    h('div', { class: 'home-body stagger' }, ...content),
+    h('div', { class: 'home-body stagger' }, ...content, streakBadge(data.currentStreak), dailyQuestionButton(data.dailyQuestionUrl, data.isDailyQuestionCompleted)),
   );
 }
 
@@ -83,14 +86,21 @@ function allSet(): HTMLElement {
   );
 }
 
-function leetCodeButton(tabProblem: string | null): HTMLElement {
-  if (tabProblem) {
-    return h('p', { class: 'watching-note' }, icon('eye', 'icon-xs'), 'Watching ', h('strong', null, problemName(tabProblem)));
-  }
+function streakBadge(streak: number): HTMLElement {
+  if (streak === 0) return h('div');
+  return h(
+    'p',
+    { class: 'streak-badge' },
+    `🔥 ${streak} day${streak === 1 ? '' : 's'} streak`,
+  );
+}
+
+function dailyQuestionButton(url: string, isCompleted: boolean): HTMLElement {
   return h(
     'a',
-    { class: 'button secondary', href: 'https://leetcode.com/problemset/', target: '_blank' },
-    'Open LeetCode',
+    { class: `button secondary${!isCompleted ? ' has-notification' : ''}`, href: url, target: '_blank', rel: 'noopener noreferrer' },
+    !isCompleted && h('span', { class: 'notification-badge' }, '●'),
+    "Today's Daily Question",
     icon('external', 'icon-sm'),
   );
 }

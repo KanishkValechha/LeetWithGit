@@ -129,6 +129,8 @@ button, input { font: inherit; color: inherit; }
 .button.secondary:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .button.small { height: 28px; padding: 0 10px; gap: 6px; font-size: 12px; background: var(--surface-2); border-color: var(--border-strong); }
 .button.small:hover:not(:disabled) { background: #1d1d1d; }
+.button.has-notification { position: relative; }
+.notification-badge { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
 
 .link {
   display: inline-flex;
@@ -350,6 +352,7 @@ label { font-size: 12px; font-weight: 500; color: var(--muted); }
 @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 70%, 100% { transform: scale(2.8); opacity: 0; } }
 
 .home-body { display: grid; gap: 12px; padding: 14px 16px 16px; }
+.streak-badge { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text); }
 
 .all-set {
   display: grid;
