@@ -251,6 +251,7 @@ function statsBlock({ username, solved, total }: LeetCodeProfile): HTMLElement {
 
 function recentList(solutions: SavedSolution[]): HTMLElement {
   const now = Date.now();
+  const MAX_RECENT_ITEMS = 3;
   return h(
     'section',
     { class: 'recent' },
@@ -258,7 +259,7 @@ function recentList(solutions: SavedSolution[]): HTMLElement {
     h(
       'ul',
       { class: 'recent-list' },
-      ...solutions.map((solution) =>
+      ...solutions.slice(0, MAX_RECENT_ITEMS).map((solution) =>
         h(
           'li',
           null,
