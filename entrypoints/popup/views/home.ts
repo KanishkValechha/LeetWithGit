@@ -1,5 +1,5 @@
 import { sendMessage } from '@/lib/api/messages';
-import type { LeetCodeProfile } from '@/lib/types/leetcode';
+import type { DailyQuestion, LeetCodeProfile } from '@/lib/types/leetcode';
 import type { QueuedSubmission } from '@/lib/types/submission';
 import type { ActiveUpload, SavedSolution, SolutionSummary, SyncStatus } from '@/lib/types/sync';
 import { difficultyClass, languageLabel, problemName, timeAgo, timeUntil } from '@/lib/utils/format';
@@ -15,17 +15,14 @@ export interface HomeData {
   active: ActiveUpload | null;
   status: SyncStatus | null;
   tabProblem: string | null;
-  dailyQuestionUrl: string;
-  dailyQuestionTitle: string | undefined;
-  dailyQuestionNumber: string | undefined;
-  dailyQuestionDifficulty: string | undefined;
-  currentStreak: number;
-  isDailyQuestionCompleted: boolean;
+  daily: DailyQuestion | null;
 }
 
 const JUST_SAVED_MS = 45_000;
 // An upload that has not finished by now was interrupted, e.g. by the service worker stopping.
 const STALE_UPLOAD_MS = 2 * 60_000;
+// Keeps the popup from scrolling.
+const MAX_RECENT_ITEMS = 3;
 
 // The saved card celebrates once per upload, not on every refresh while it stays visible.
 let celebratedAt = 0;
@@ -39,7 +36,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
           data.profile && statsBlock(data.profile),
           data.recent.length > 0 && recentList(data.recent),
         ]
-      : [activity ?? allSet()];
+      : [activity ?? allSet(), !activity && data.tabProblem && watchingNote(data.tabProblem)];
 
   return h(
     'div',
@@ -47,12 +44,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
     h(
       'header',
       { class: 'bar' },
-      h(
-        'div',
-        { class: 'brand' },
-        icon('logo', 'logo-sm'),
-        h('span', null, 'Leet', h('span', { class: 'brand-with' }, 'with'), 'Git'),
-      ),
+      h('div', { class: 'brand' }, icon('logo', 'logo-sm'), h('span', null, 'Leet', h('span', { class: 'brand-with' }, 'with'), 'Git')),
       h(
         'button',
         { class: 'icon-button', type: 'button', title: 'Settings', 'aria-label': 'Settings', onclick: onSettings },
@@ -60,7 +52,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
       ),
     ),
     repoStrip(data.repo, data.branch),
-    h('div', { class: 'home-body stagger' }, ...content, streakBadge(data.currentStreak), dailyQuestionButton(data.dailyQuestionUrl, data.isDailyQuestionCompleted, data.dailyQuestionNumber, data.dailyQuestionDifficulty)),
+    h('div', { class: 'home-body stagger' }, ...content, data.daily && streakLine(data.daily), dailyButton(data.daily)),
   );
 }
 
@@ -94,43 +86,35 @@ function allSet(): HTMLElement {
   );
 }
 
-function streakBadge(streak: number): HTMLElement {
-  if (streak === 0) return h('div');
-  return h(
-    'p',
-    { class: 'streak-badge' },
-    `🔥 ${streak} day${streak === 1 ? '' : 's'} streak`,
-  );
+function watchingNote(tabProblem: string): HTMLElement {
+  return h('p', { class: 'watching-note' }, icon('eye', 'icon-xs'), 'Watching ', h('strong', null, problemName(tabProblem)));
 }
 
-function dailyQuestionButton(url: string, isCompleted: boolean, questionNumber?: string, difficulty?: string): HTMLElement {
-  const difficultyColors: Record<string, string> = {
-    EASY: '#00b8a9',
-    MEDIUM: '#ffa500',
-    HARD: '#ff375f',
-  };
-  const difficultyColor = (difficulty && difficultyColors[difficulty.toUpperCase()]) || '#ffffff';
+function streakLine({ signedIn, streak }: DailyQuestion): HTMLElement | null {
+  if (!signedIn || streak < 1) return null;
+  return h('p', { class: 'streak' }, `🔥 ${streak}-day streak`);
+}
 
-  const content = isCompleted
-    ? ['Nice going! 🎉 ', icon('external', 'icon-sm')]
-    : questionNumber
-      ? [
-          'Solve todays lc daily ',
-          h('span', { style: `color: ${difficultyColor}` }, `#${questionNumber}`),
-          ' ',
-          icon('external', 'icon-sm'),
-        ]
-      : ["Today's Daily Question", ' ', icon('external', 'icon-sm')];
-
+// Falls back to the problem list until the background has loaded today's question.
+function dailyButton(daily: DailyQuestion | null): HTMLElement {
+  if (!daily) {
+    return h(
+      'a',
+      { class: 'button secondary', href: 'https://leetcode.com/problemset/', target: '_blank' },
+      'Open LeetCode',
+      icon('external', 'icon-sm'),
+    );
+  }
   return h(
     'a',
-    {
-      class: 'button secondary',
-      href: url,
-      target: '_blank',
-      rel: 'noopener noreferrer',
-    },
-    ...content,
+    { class: 'button secondary', href: daily.url, target: '_blank', title: daily.title },
+    ...(daily.completed
+      ? ['Daily solved. Nice going! 🎉']
+      : [
+          "Solve today's daily",
+          h('span', { class: `difficulty ${difficultyClass(daily.difficulty)}` }, `#${daily.questionNumber}`),
+        ]),
+    icon('external', 'icon-sm'),
   );
 }
 
@@ -251,7 +235,6 @@ function statsBlock({ username, solved, total }: LeetCodeProfile): HTMLElement {
 
 function recentList(solutions: SavedSolution[]): HTMLElement {
   const now = Date.now();
-  const MAX_RECENT_ITEMS = 3;
   return h(
     'section',
     { class: 'recent' },

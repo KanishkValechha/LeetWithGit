@@ -1,13 +1,14 @@
 import { browser, type Browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { REPOSITORY_PATTERN } from '@/lib/constants';
+import { dailyQuestionResponseSchema } from '@/lib/schemas/leetcode';
 import { runtimeMessageSchema } from '@/lib/schemas/messages';
-import { setBadge } from '@/lib/api/badge';
+import { setBadge, type BadgeState } from '@/lib/api/badge';
 import { uploadSolution } from '@/lib/api/github';
 import {
   activeUpload,
   branchName,
-  dailyQuestionData,
+  dailyQuestion,
   githubToken,
   lastSyncStatus,
   migrateLegacyToken,
@@ -16,12 +17,21 @@ import {
   recentSubmissionKeys,
   repoName,
 } from '@/lib/api/storage';
+import type { DailyQuestion } from '@/lib/types/leetcode';
 import type { RuntimeMessage } from '@/lib/types/messages';
 import type { QueuedSubmission, Submission } from '@/lib/types/submission';
-import { errorMessage, isLeetCodeUrl } from '@/lib/utils/helpers';
+import { errorMessage, isLeetCodeUrl, utcDate } from '@/lib/utils/helpers';
 
 const RETRY_ALARM = 'retry-pending-submissions';
-const DAILY_QUESTION_ALARM = 'fetch-daily-question';
+const DAILY_QUESTION_ALARM = 'refresh-daily-question';
+// Until today's question is solved, check hourly so a solve on another device clears the badge.
+const DAILY_REFRESH_MS = 60 * 60 * 1000;
+const DAILY_RETRY_MS = 15 * 60 * 1000;
+const DAILY_QUESTION_QUERY = `{
+  activeDailyCodingChallengeQuestion { date userStatus question { questionId questionFrontendId title titleSlug difficulty } }
+  userStatus { isSignedIn }
+  streakCounter { streakCount }
+}`;
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
 const MAX_RECENT_KEYS = 1000;
 const MAX_RECENT_SOLUTIONS = 5;
@@ -34,7 +44,6 @@ let processing = false;
 // Set when processQueue is called mid-run, e.g. by Retry now, so newly due items are not left for the alarm.
 let rerunQueue = false;
 let queueLock: Promise<unknown> = Promise.resolve();
-let lastDailyFetchDay = -1;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
@@ -49,7 +58,7 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === RETRY_ALARM) void processQueue();
-    if (alarm.name === DAILY_QUESTION_ALARM) void fetchAndCacheDailyQuestion();
+    if (alarm.name === DAILY_QUESTION_ALARM) void refreshDailyQuestion();
   });
 
   browser.notifications.onClicked.addListener((notificationId) => {
@@ -62,31 +71,14 @@ export default defineBackground(() => {
     await migrateLegacyToken();
     await injectIntoOpenLeetCodeTabs(reason === 'install');
     await processQueue();
-    await fetchAndCacheDailyQuestion();
+    await refreshDailyQuestion();
   });
 
   browser.runtime.onStartup.addListener(() => {
     void processQueue();
-    void fetchAndCacheDailyQuestion();
+    void refreshDailyQuestion();
   });
-
-  // Set initial badge state and watch for changes
-  updateBadgeFromStorage().catch(() => {});
-  dailyQuestionData.watch(updateBadgeFromStorage);
 });
-
-async function updateBadgeFromStorage(): Promise<void> {
-  try {
-    const data = await dailyQuestionData.getValue();
-    if (data && !data.isCompleted) {
-      await setBadge('daily-incomplete').catch(() => {});
-    } else {
-      await setBadge('clear').catch(() => {});
-    }
-  } catch (error: unknown) {
-    console.error('[LeetWithGit] Failed to update badge:', error);
-  }
-}
 
 // LeetCode tabs opened before an install or update keep running without our scripts, or with a relay
 // the update cut off, so their accepted solutions would not be saved until the page is refreshed.
@@ -124,31 +116,20 @@ async function queueFromLeetCode(
   sender: Browser.runtime.MessageSender,
 ): Promise<void> {
   if (!sender.tab || !isLeetCodeUrl(sender.url)) throw new Error('Submission did not come from LeetCode.');
+  await markDailySolved(payload).catch((error: unknown) => {
+    console.error('LeetWithGit could not update the daily question:', error);
+  });
   if (await enqueue(payload)) await processQueue();
-
-  // Update daily question completion if this submission matches today's daily question
-  await updateDailyQuestionCompletion(payload);
 }
 
-async function updateDailyQuestionCompletion(payload: Submission): Promise<void> {
-  try {
-    const data = await dailyQuestionData.getValue();
-    if (!data) return;
-
-    // Extract slug from payload URL (e.g., "two-sum" from "https://leetcode.com/problems/two-sum/")
-    const payloadSlug = payload.problemTitle?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    const dataSlug = data.url.match(/\/problems\/([^/]+)/)?.[1];
-
-    if (payloadSlug && dataSlug && payloadSlug === dataSlug) {
-      console.log('[LeetWithGit] Marking daily question as completed:', dataSlug);
-      await dailyQuestionData.setValue({ ...data, isCompleted: true });
-    } else {
-      console.log('[LeetWithGit] Submission does not match daily question, refreshing status from server');
-      await fetchAndCacheDailyQuestion();
-    }
-  } catch (error: unknown) {
-    console.error('[LeetWithGit] Could not update daily question completion:', error);
-  }
+// Clears the daily badge as soon as the accepted solution arrives, before the upload and LeetCode's own
+// status catch up. A refresh shortly after picks up the new streak.
+async function markDailySolved(payload: Submission): Promise<void> {
+  const daily = await dailyQuestion.getValue();
+  if (!daily || daily.completed || daily.questionId !== payload.questionId || daily.date !== utcDate()) return;
+  await dailyQuestion.setValue({ ...daily, completed: true });
+  await showIdleBadge();
+  await browser.alarms.create(DAILY_QUESTION_ALARM, { delayInMinutes: 1 });
 }
 
 function withQueueLock<T>(task: () => Promise<T>): Promise<T> {
@@ -211,8 +192,11 @@ async function processQueue(): Promise<void> {
     processing = false;
     await activeUpload.setValue(null);
     const waiting = (await pendingSubmissions.getValue()).length;
-    if (attempted || waiting) {
-      await setBadge(waiting ? 'waiting' : saved ? 'saved' : 'clear', waiting).catch(() => {});
+    if (saved && !waiting) {
+      const settle = await idleBadge().catch((): BadgeState => 'clear');
+      await setBadge('saved', 0, settle).catch(() => {});
+    } else if (attempted || waiting) {
+      await showIdleBadge();
     }
     await scheduleRetry().catch((error: unknown) => {
       console.error('LeetWithGit could not schedule queued uploads:', error);
@@ -272,143 +256,77 @@ async function scheduleRetry(): Promise<void> {
   await browser.alarms.create(RETRY_ALARM, { when: Math.max(Date.now() + 1000, nextAttemptAt) });
 }
 
-async function fetchAndCacheDailyQuestion(): Promise<void> {
-  const now = new Date();
-  const utcDay = Math.floor(now.getTime() / (24 * 60 * 60 * 1000));
-
-  if (lastDailyFetchDay === utcDay) {
-    console.log('[LeetWithGit] Daily question already fetched today');
-    return;
-  }
-
-  console.log('[LeetWithGit] Fetching daily question for UTC day:', utcDay);
-
+// The upload states own the badge. The daily dot shows only when nothing is uploading or waiting.
+async function showIdleBadge(): Promise<void> {
   try {
-    const newData = await fetchDailyQuestionData();
-    const storedData = await dailyQuestionData.getValue();
-
-    // Preserve local completion state if already marked complete for this question
-    const data = storedData && storedData.isCompleted && storedData.url === newData.url
-      ? { ...newData, isCompleted: true }
-      : newData;
-
-    await dailyQuestionData.setValue(data);
-    console.log('[LeetWithGit] Daily question cached:', data);
-    lastDailyFetchDay = utcDay;
-
-    // Update badge after caching
-    if (data && !data.isCompleted) {
-      await setBadge('daily-incomplete').catch(() => {});
-    } else {
-      await setBadge('clear').catch(() => {});
-    }
+    const [waiting, state] = await Promise.all([pendingSubmissions.getValue().then((queue) => queue.length), idleBadge()]);
+    if (processing) return;
+    await setBadge(waiting ? 'waiting' : state, waiting);
   } catch (error: unknown) {
-    console.error('[LeetWithGit] Failed to fetch daily question:', error);
-    await dailyQuestionData.setValue(null);
-    await setBadge('clear').catch(() => {});
+    console.error('LeetWithGit could not update the badge:', error);
   }
-
-  // Schedule next fetch for tomorrow at midnight UTC
-  const tomorrow = new Date();
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  tomorrow.setUTCHours(0, 0, 0, 0);
-  await browser.alarms.create(DAILY_QUESTION_ALARM, { when: tomorrow.getTime() });
 }
 
-async function fetchDailyQuestionData(): Promise<{ url: string; streak: number; isCompleted: boolean; title?: string; difficulty?: string; questionNumber?: string }> {
-  const DAILY_QUESTION_FALLBACK = 'https://leetcode.com/problemset/';
+async function idleBadge(): Promise<BadgeState> {
+  const daily = await dailyQuestion.getValue();
+  return daily?.signedIn && !daily.completed && daily.date === utcDate() ? 'daily' : 'clear';
+}
 
+async function refreshDailyQuestion(): Promise<void> {
+  let nextRefresh = Date.now() + DAILY_RETRY_MS;
+  try {
+    const fetched = await fetchDailyQuestion();
+    const stored = await dailyQuestion.getValue();
+    // LeetCode can still report the question unsolved just after markDailySolved saw it accepted.
+    const completed =
+      fetched.completed ||
+      (fetched.signedIn && stored?.completed === true && stored.date === fetched.date && stored.questionId === fetched.questionId);
+    await dailyQuestion.setValue({ ...fetched, completed });
+    nextRefresh = completed ? nextUtcMidnight() : Math.min(nextUtcMidnight(), Date.now() + DAILY_REFRESH_MS);
+  } catch (error: unknown) {
+    console.error('LeetWithGit could not load the daily question:', error);
+    // Ride out a brief outage with today's question, but never show yesterday's.
+    const stored = await dailyQuestion.getValue();
+    if (stored && stored.date !== utcDate()) await dailyQuestion.setValue(null);
+  }
+  await showIdleBadge();
+  await browser.alarms.create(DAILY_QUESTION_ALARM, { when: nextRefresh });
+}
+
+// The worker's request carries the browser's LeetCode cookies, so the solved state and streak are the user's.
+async function fetchDailyQuestion(): Promise<DailyQuestion> {
   const response = await fetch('https://leetcode.com/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: '{ activeDailyCodingChallengeQuestion { question { titleSlug title difficulty questionFrontendId } userStatus } }',
-    }),
+    body: JSON.stringify({ query: DAILY_QUESTION_QUERY }),
     credentials: 'include',
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(10_000),
   });
+  if (!response.ok) throw new Error(`LeetCode returned HTTP ${response.status}.`);
+  // GraphQL reports failures with HTTP 200 and an errors array instead of data.
+  const { data, errors } = (await response.json()) as { data?: unknown; errors?: { message: string }[] };
+  if (errors?.length || !data) throw new Error(errors?.[0]?.message ?? 'LeetCode returned no data.');
 
-  if (!response.ok) throw new Error(`Daily question lookup failed (${response.status}).`);
-
-  const result = (await response.json()) as {
-    data?: {
-      activeDailyCodingChallengeQuestion?: {
-        question?: { titleSlug?: string; title?: string; difficulty?: string; questionFrontendId?: string } | null;
-        userStatus?: string | null;
-      } | null;
-    };
-    errors?: { message: string }[];
-  };
-
-  if (result.errors?.length || !result.data) throw new Error(result.errors?.[0]?.message ?? 'Daily question lookup failed.');
-
-  const slug = result.data.activeDailyCodingChallengeQuestion?.question?.titleSlug;
-  const title = result.data.activeDailyCodingChallengeQuestion?.question?.title;
-  const difficulty = result.data.activeDailyCodingChallengeQuestion?.question?.difficulty;
-  const questionNumber = result.data.activeDailyCodingChallengeQuestion?.question?.questionFrontendId;
-  const completionStatus = result.data.activeDailyCodingChallengeQuestion?.userStatus;
-  const isCompleted = completionStatus === 'ac' || completionStatus === 'AC';
-
-  const url = typeof slug === 'string' && /^[a-z0-9-]+$/i.test(slug)
-    ? `https://leetcode.com/problems/${encodeURIComponent(slug)}/description/`
-    : DAILY_QUESTION_FALLBACK;
-
-  let streak = 0;
-  if (slug) {
-    streak = await fetchDailyStreakFromPanel(slug).catch((err) => {
-      console.error('[LeetWithGit] Failed to fetch streak:', err);
-      return 0;
-    });
-  }
-
+  const { activeDailyCodingChallengeQuestion: daily, userStatus, streakCounter } = dailyQuestionResponseSchema.parse(data);
+  const signedIn = userStatus?.isSignedIn ?? false;
   return {
-    url,
-    streak,
-    isCompleted,
-    ...(title !== undefined && { title }),
-    ...(difficulty !== undefined && { difficulty }),
-    ...(questionNumber !== undefined && { questionNumber }),
+    date: daily.date,
+    questionId: daily.question.questionId,
+    questionNumber: daily.question.questionFrontendId,
+    title: daily.question.title,
+    difficulty: daily.question.difficulty,
+    url: `https://leetcode.com/problems/${daily.question.titleSlug}/`,
+    signedIn,
+    completed: signedIn && daily.userStatus === 'Finish',
+    streak: streakCounter?.streakCount ?? 0,
   };
 }
 
-async function fetchDailyStreakFromPanel(currentQuestionSlug: string): Promise<number> {
-  const today = new Date().toISOString().split('T')[0];
-  const response = await fetch('https://leetcode.com/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `query panelQuestionList($currentQuestionSlug: String!, $envId: String, $envType: String) {
-        panelQuestionList(
-          currentQuestionSlug: $currentQuestionSlug
-          envId: $envId
-          envType: $envType
-        ) {
-          finishedLength
-        }
-      }`,
-      variables: {
-        currentQuestionSlug,
-        envId: today,
-        envType: 'daily-question',
-      },
-    }),
-    credentials: 'include',
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!response.ok) throw new Error(`Streak lookup failed (${response.status}).`);
-
-  const result = (await response.json()) as {
-    data?: {
-      panelQuestionList?: { finishedLength?: number } | null;
-    };
-    errors?: { message: string }[];
-  };
-
-  if (result.errors?.length) throw new Error(result.errors[0]?.message ?? 'Streak lookup failed.');
-
-  const finishedLength = result.data?.panelQuestionList?.finishedLength ?? 0;
-  return finishedLength;
+// A minute past midnight, so LeetCode has already switched to the new question.
+function nextUtcMidnight(): number {
+  const next = new Date();
+  next.setUTCHours(24, 1, 0, 0);
+  return next.getTime();
 }
 
 function notify(title: string, message: string, openUrl?: string): void {

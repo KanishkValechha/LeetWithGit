@@ -3,7 +3,7 @@ import { browser } from 'wxt/browser';
 import {
   activeUpload,
   branchName,
-  dailyQuestionData,
+  dailyQuestion,
   githubToken,
   lastSyncStatus,
   leetCodeProfile,
@@ -11,7 +11,7 @@ import {
   recentSolutions,
   repoName,
 } from '@/lib/api/storage';
-import { errorMessage } from '@/lib/utils/helpers';
+import { errorMessage, utcDate } from '@/lib/utils/helpers';
 import { h } from './dom';
 import { homeView, type HomeData } from './views/home';
 import { settingsView } from './views/settings';
@@ -22,10 +22,6 @@ type Screen = 'setup' | 'home' | 'settings';
 const root = document.getElementById('app');
 if (!root) throw new Error('Popup root is missing.');
 let screen: Screen = 'setup';
-const DAILY_QUESTION_FALLBACK = 'https://leetcode.com/problemset/';
-let dailyQuestionUrl = DAILY_QUESTION_FALLBACK;
-let currentStreak = 0;
-let isDailyQuestionCompleted = false;
 
 function mount(view: Node, animate = true): void {
   // Live refreshes that change nothing visible would only restart running animations.
@@ -67,7 +63,7 @@ async function showSettings(): Promise<void> {
 }
 
 async function loadHomeData(): Promise<HomeData> {
-  const [repo, branch, recent, profile, queue, active, status, tabProblem, data] = await Promise.all([
+  const [repo, branch, recent, profile, queue, active, status, tabProblem, storedDaily] = await Promise.all([
     repoName.getValue(),
     branchName.getValue(),
     recentSolutions.getValue(),
@@ -76,24 +72,11 @@ async function loadHomeData(): Promise<HomeData> {
     activeUpload.getValue(),
     lastSyncStatus.getValue(),
     currentLeetCodeProblem(),
-    dailyQuestionData.getValue(),
+    dailyQuestion.getValue(),
   ]);
-  return {
-    repo,
-    branch,
-    recent,
-    profile,
-    queue,
-    active,
-    status,
-    tabProblem,
-    dailyQuestionUrl: data?.url ?? DAILY_QUESTION_FALLBACK,
-    dailyQuestionTitle: data?.title,
-    dailyQuestionNumber: data?.questionNumber,
-    dailyQuestionDifficulty: data?.difficulty,
-    currentStreak: data?.streak ?? 0,
-    isDailyQuestionCompleted: data?.isCompleted ?? false
-  };
+  // Yesterday's question is stale until the background refresh replaces it.
+  const daily = storedDaily?.date === utcDate() ? storedDaily : null;
+  return { repo, branch, recent, profile, queue, active, status, tabProblem, daily };
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
@@ -112,7 +95,7 @@ function refreshHome(): void {
   if (screen === 'home') void showHome(false);
 }
 
-for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus, dailyQuestionData]) item.watch(refreshHome);
+for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus, dailyQuestion]) item.watch(refreshHome);
 // Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
 
