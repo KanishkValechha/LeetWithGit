@@ -24,7 +24,7 @@ import { errorMessage, isLeetCodeUrl, utcDate } from '@/lib/utils/helpers';
 
 const RETRY_ALARM = 'retry-pending-submissions';
 const DAILY_QUESTION_ALARM = 'refresh-daily-question';
-// Until today's question is solved, check hourly so a solve on another device clears the badge.
+// Until LeetCode reports today's question solved, check hourly so a solve on another device clears the badge.
 const DAILY_REFRESH_MS = 60 * 60 * 1000;
 const DAILY_RETRY_MS = 15 * 60 * 1000;
 // After a local solve, refresh soon to pick up the new streak.
@@ -305,7 +305,8 @@ async function refreshDailyQuestion(): Promise<void> {
         fetched.completed ||
         (fetched.signedIn && stored?.completed === true && stored.date === fetched.date && stored.questionId === fetched.questionId);
       await dailyQuestion.setValue({ ...fetched, completed });
-      nextRefresh = completed ? nextUtcMidnight() : Math.min(nextUtcMidnight(), Date.now() + DAILY_REFRESH_MS);
+      // Wait for midnight only once LeetCode confirms the solve; until then its streak may be stale.
+      nextRefresh = fetched.completed ? nextUtcMidnight() : Math.min(nextUtcMidnight(), Date.now() + DAILY_REFRESH_MS);
     } else if (stored && stored.date !== utcDate()) {
       // Ride out a brief outage with today's question, but never show yesterday's.
       await dailyQuestion.setValue(null);
