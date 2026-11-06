@@ -3,6 +3,7 @@ import { browser } from 'wxt/browser';
 import {
   activeUpload,
   branchName,
+  dailyQuestion,
   githubToken,
   lastSyncStatus,
   leetCodeProfile,
@@ -10,7 +11,7 @@ import {
   recentSolutions,
   repoName,
 } from '@/lib/api/storage';
-import { errorMessage } from '@/lib/utils/helpers';
+import { errorMessage, utcDate } from '@/lib/utils/helpers';
 import { h } from './dom';
 import { homeView, type HomeData } from './views/home';
 import { settingsView } from './views/settings';
@@ -62,7 +63,7 @@ async function showSettings(): Promise<void> {
 }
 
 async function loadHomeData(): Promise<HomeData> {
-  const [repo, branch, recent, profile, queue, active, status, tabProblem] = await Promise.all([
+  const [repo, branch, recent, profile, queue, active, status, tabProblem, storedDaily] = await Promise.all([
     repoName.getValue(),
     branchName.getValue(),
     recentSolutions.getValue(),
@@ -71,8 +72,11 @@ async function loadHomeData(): Promise<HomeData> {
     activeUpload.getValue(),
     lastSyncStatus.getValue(),
     currentLeetCodeProblem(),
+    dailyQuestion.getValue(),
   ]);
-  return { repo, branch, recent, profile, queue, active, status, tabProblem };
+  // Yesterday's question is stale until the background refresh replaces it.
+  const daily = storedDaily?.date === utcDate() ? storedDaily : null;
+  return { repo, branch, recent, profile, queue, active, status, tabProblem, daily };
 }
 
 // The extension has host access to leetcode.com, so the active tab's URL is visible there.
@@ -91,7 +95,7 @@ function refreshHome(): void {
   if (screen === 'home') void showHome(false);
 }
 
-for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus]) item.watch(refreshHome);
+for (const item of [pendingSubmissions, activeUpload, recentSolutions, leetCodeProfile, lastSyncStatus, dailyQuestion]) item.watch(refreshHome);
 // Keeps relative times and retry countdowns current while the popup stays open.
 setInterval(refreshHome, 10_000);
 

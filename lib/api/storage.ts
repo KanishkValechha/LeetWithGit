@@ -1,5 +1,5 @@
 import { storage } from 'wxt/utils/storage';
-import type { LeetCodeProfile } from '../types/leetcode';
+import type { DailyQuestion, LeetCodeProfile } from '../types/leetcode';
 import type { QueuedSubmission } from '../types/submission';
 import type { ActiveUpload, SavedSolution, SyncStatus } from '../types/sync';
 
@@ -12,6 +12,7 @@ export const lastSyncStatus = storage.defineItem<SyncStatus>('local:lastSyncStat
 export const activeUpload = storage.defineItem<ActiveUpload | null>('local:activeUpload', { fallback: null });
 export const recentSolutions = storage.defineItem<SavedSolution[]>('local:recentSolutions', { fallback: [] });
 export const leetCodeProfile = storage.defineItem<LeetCodeProfile | null>('local:leetCodeProfile', { fallback: null });
+export const dailyQuestion = storage.defineItem<DailyQuestion | null>('local:dailyQuestion', { fallback: null });
 
 // Versions before 1.6 stored the token in sync storage.
 const legacySyncedToken = storage.defineItem<string>('sync:githubToken');

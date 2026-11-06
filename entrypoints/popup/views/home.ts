@@ -1,5 +1,5 @@
 import { sendMessage } from '@/lib/api/messages';
-import type { LeetCodeProfile } from '@/lib/types/leetcode';
+import type { DailyQuestion, LeetCodeProfile } from '@/lib/types/leetcode';
 import type { QueuedSubmission } from '@/lib/types/submission';
 import type { ActiveUpload, SavedSolution, SolutionSummary, SyncStatus } from '@/lib/types/sync';
 import { difficultyClass, languageLabel, problemName, timeAgo, timeUntil } from '@/lib/utils/format';
@@ -15,11 +15,14 @@ export interface HomeData {
   active: ActiveUpload | null;
   status: SyncStatus | null;
   tabProblem: string | null;
+  daily: DailyQuestion | null;
 }
 
 const JUST_SAVED_MS = 45_000;
 // An upload that has not finished by now was interrupted, e.g. by the service worker stopping.
 const STALE_UPLOAD_MS = 2 * 60_000;
+// Keeps the popup from scrolling.
+const MAX_RECENT_ITEMS = 3;
 
 // The saved card celebrates once per upload, not on every refresh while it stays visible.
 let celebratedAt = 0;
@@ -33,7 +36,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
           data.profile && statsBlock(data.profile),
           data.recent.length > 0 && recentList(data.recent),
         ]
-      : [activity ?? allSet(), !activity && leetCodeButton(data.tabProblem)];
+      : [activity ?? allSet(), !activity && data.tabProblem && watchingNote(data.tabProblem)];
 
   return h(
     'div',
@@ -49,7 +52,7 @@ export function homeView(data: HomeData, { onSettings }: { onSettings: () => voi
       ),
     ),
     repoStrip(data.repo, data.branch),
-    h('div', { class: 'home-body stagger' }, ...content),
+    h('div', { class: 'home-body stagger' }, ...content, data.daily && streakLine(data.daily), dailyButton(data.daily)),
   );
 }
 
@@ -83,14 +86,34 @@ function allSet(): HTMLElement {
   );
 }
 
-function leetCodeButton(tabProblem: string | null): HTMLElement {
-  if (tabProblem) {
-    return h('p', { class: 'watching-note' }, icon('eye', 'icon-xs'), 'Watching ', h('strong', null, problemName(tabProblem)));
+function watchingNote(tabProblem: string): HTMLElement {
+  return h('p', { class: 'watching-note' }, icon('eye', 'icon-xs'), 'Watching ', h('strong', null, problemName(tabProblem)));
+}
+
+function streakLine({ signedIn, streak }: DailyQuestion): HTMLElement | null {
+  if (!signedIn || streak < 1) return null;
+  return h('p', { class: 'streak' }, `🔥 ${streak}-day streak`);
+}
+
+// Falls back to the problem list until the background has loaded today's question.
+function dailyButton(daily: DailyQuestion | null): HTMLElement {
+  if (!daily) {
+    return h(
+      'a',
+      { class: 'button secondary', href: 'https://leetcode.com/problemset/', target: '_blank' },
+      'Open LeetCode',
+      icon('external', 'icon-sm'),
+    );
   }
   return h(
     'a',
-    { class: 'button secondary', href: 'https://leetcode.com/problemset/', target: '_blank' },
-    'Open LeetCode',
+    { class: 'button secondary', href: daily.url, target: '_blank', title: daily.title },
+    ...(daily.completed
+      ? ['Daily solved. Nice going! 🎉']
+      : [
+          "Solve today's daily",
+          h('span', { class: `difficulty ${difficultyClass(daily.difficulty)}` }, `#${daily.questionNumber}`),
+        ]),
     icon('external', 'icon-sm'),
   );
 }
@@ -219,7 +242,7 @@ function recentList(solutions: SavedSolution[]): HTMLElement {
     h(
       'ul',
       { class: 'recent-list' },
-      ...solutions.map((solution) =>
+      ...solutions.slice(0, MAX_RECENT_ITEMS).map((solution) =>
         h(
           'li',
           null,
