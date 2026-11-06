@@ -27,6 +27,8 @@ const DAILY_QUESTION_ALARM = 'refresh-daily-question';
 // Until today's question is solved, check hourly so a solve on another device clears the badge.
 const DAILY_REFRESH_MS = 60 * 60 * 1000;
 const DAILY_RETRY_MS = 15 * 60 * 1000;
+// After a local solve, refresh soon to pick up the new streak.
+const DAILY_STREAK_REFRESH_MS = 60 * 1000;
 const DAILY_QUESTION_QUERY = `{
   activeDailyCodingChallengeQuestion { date userStatus question { questionId questionFrontendId title titleSlug difficulty } }
   userStatus { isSignedIn }
@@ -43,7 +45,9 @@ const MAX_NOTIFICATION_ID_LENGTH = 500;
 let processing = false;
 // Set when processQueue is called mid-run, e.g. by Retry now, so newly due items are not left for the alarm.
 let rerunQueue = false;
-let queueLock: Promise<unknown> = Promise.resolve();
+const withQueueLock = createLock();
+// Keeps a refresh from overwriting a solve that markDailySolved recorded while the refresh was in flight.
+const withDailyLock = createLock();
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
@@ -125,17 +129,24 @@ async function queueFromLeetCode(
 // Clears the daily badge as soon as the accepted solution arrives, before the upload and LeetCode's own
 // status catch up. A refresh shortly after picks up the new streak.
 async function markDailySolved(payload: Submission): Promise<void> {
-  const daily = await dailyQuestion.getValue();
-  if (!daily || daily.completed || daily.questionId !== payload.questionId || daily.date !== utcDate()) return;
-  await dailyQuestion.setValue({ ...daily, completed: true });
-  await showIdleBadge();
-  await browser.alarms.create(DAILY_QUESTION_ALARM, { delayInMinutes: 1 });
+  const marked = await withDailyLock(async () => {
+    const daily = await dailyQuestion.getValue();
+    if (!daily || daily.completed || daily.questionId !== payload.questionId || daily.date !== utcDate()) return false;
+    await dailyQuestion.setValue({ ...daily, completed: true });
+    await scheduleDailyRefresh(Date.now() + DAILY_STREAK_REFRESH_MS);
+    return true;
+  });
+  if (marked) await showIdleBadge();
 }
 
-function withQueueLock<T>(task: () => Promise<T>): Promise<T> {
-  const run = queueLock.then(task, task);
-  queueLock = run.catch(() => {});
-  return run;
+// Runs tasks one at a time, in the order they were queued.
+function createLock(): <T>(task: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (task) => {
+    const run = tail.then(task, task);
+    tail = run.catch(() => {});
+    return run;
+  };
 }
 
 async function enqueue(payload: Submission): Promise<boolean> {
@@ -273,24 +284,42 @@ async function idleBadge(): Promise<BadgeState> {
 }
 
 async function refreshDailyQuestion(): Promise<void> {
-  let nextRefresh = Date.now() + DAILY_RETRY_MS;
-  try {
-    const fetched = await fetchDailyQuestion();
+  // The request stays outside the lock so a slow LeetCode never delays markDailySolved.
+  const fetched = await fetchDailyQuestion()
+    .then((daily) => {
+      // LeetCode can serve the previous day's question for a moment after UTC midnight.
+      if (daily.date !== utcDate()) throw new Error(`LeetCode still returned the daily question for ${daily.date}.`);
+      return daily;
+    })
+    .catch((error: unknown) => {
+      console.error('LeetWithGit could not load the daily question:', error);
+      return null;
+    });
+
+  await withDailyLock(async () => {
     const stored = await dailyQuestion.getValue();
-    // LeetCode can still report the question unsolved just after markDailySolved saw it accepted.
-    const completed =
-      fetched.completed ||
-      (fetched.signedIn && stored?.completed === true && stored.date === fetched.date && stored.questionId === fetched.questionId);
-    await dailyQuestion.setValue({ ...fetched, completed });
-    nextRefresh = completed ? nextUtcMidnight() : Math.min(nextUtcMidnight(), Date.now() + DAILY_REFRESH_MS);
-  } catch (error: unknown) {
-    console.error('LeetWithGit could not load the daily question:', error);
-    // Ride out a brief outage with today's question, but never show yesterday's.
-    const stored = await dailyQuestion.getValue();
-    if (stored && stored.date !== utcDate()) await dailyQuestion.setValue(null);
-  }
+    let nextRefresh = Date.now() + DAILY_RETRY_MS;
+    if (fetched) {
+      // LeetCode can still report the question unsolved just after markDailySolved saw it accepted.
+      const completed =
+        fetched.completed ||
+        (fetched.signedIn && stored?.completed === true && stored.date === fetched.date && stored.questionId === fetched.questionId);
+      await dailyQuestion.setValue({ ...fetched, completed });
+      nextRefresh = completed ? nextUtcMidnight() : Math.min(nextUtcMidnight(), Date.now() + DAILY_REFRESH_MS);
+    } else if (stored && stored.date !== utcDate()) {
+      // Ride out a brief outage with today's question, but never show yesterday's.
+      await dailyQuestion.setValue(null);
+    }
+    await scheduleDailyRefresh(nextRefresh);
+  });
   await showIdleBadge();
-  await browser.alarms.create(DAILY_QUESTION_ALARM, { when: nextRefresh });
+}
+
+// Never postpones a refresh that is already due sooner, such as the streak refresh after a solve.
+async function scheduleDailyRefresh(when: number): Promise<void> {
+  const pending = await browser.alarms.get(DAILY_QUESTION_ALARM);
+  const next = pending && pending.scheduledTime > Date.now() ? Math.min(pending.scheduledTime, when) : when;
+  await browser.alarms.create(DAILY_QUESTION_ALARM, { when: next });
 }
 
 // The worker's request carries the browser's LeetCode cookies, so the solved state and streak are the user's.
