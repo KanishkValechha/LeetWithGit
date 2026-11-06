@@ -31,7 +31,7 @@ const DAILY_RETRY_MS = 15 * 60 * 1000;
 const DAILY_STREAK_REFRESH_MS = 60 * 1000;
 const DAILY_QUESTION_QUERY = `{
   activeDailyCodingChallengeQuestion { date userStatus question { questionId questionFrontendId title titleSlug difficulty } }
-  userStatus { isSignedIn }
+  userStatus { isSignedIn username }
   streakCounter { streakCount }
 }`;
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
@@ -303,7 +303,11 @@ async function refreshDailyQuestion(): Promise<void> {
       // LeetCode can still report the question unsolved just after markDailySolved saw it accepted.
       const completed =
         fetched.completed ||
-        (fetched.signedIn && stored?.completed === true && stored.date === fetched.date && stored.questionId === fetched.questionId);
+        (fetched.signedIn &&
+          stored?.completed === true &&
+          stored.username === fetched.username &&
+          stored.date === fetched.date &&
+          stored.questionId === fetched.questionId);
       await dailyQuestion.setValue({ ...fetched, completed });
       // Wait for midnight only once LeetCode confirms the solve; until then its streak may be stale.
       nextRefresh = fetched.completed ? nextUtcMidnight() : Math.min(nextUtcMidnight(), Date.now() + DAILY_REFRESH_MS);
@@ -347,6 +351,7 @@ async function fetchDailyQuestion(): Promise<DailyQuestion> {
     difficulty: daily.question.difficulty,
     url: `https://leetcode.com/problems/${daily.question.titleSlug}/`,
     signedIn,
+    username: signedIn ? (userStatus?.username ?? '') : '',
     completed: signedIn && daily.userStatus === 'Finish',
     streak: streakCounter?.streakCount ?? 0,
   };

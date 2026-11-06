@@ -15,6 +15,8 @@ export interface DailyQuestion {
   difficulty: string;
   url: string;
   signedIn: boolean;
+  // The LeetCode account the solved state belongs to, or empty when signed out.
+  username: string;
   completed: boolean;
   streak: number;
 }

@@ -21,7 +21,7 @@ export const dailyQuestionResponseSchema = z.object({
       difficulty: z.string(),
     }),
   }),
-  userStatus: z.object({ isSignedIn: z.boolean() }).nullish(),
+  userStatus: z.object({ isSignedIn: z.boolean(), username: z.string().nullish() }).nullish(),
   // Null when signed out.
   streakCounter: z.object({ streakCount: z.number() }).nullish(),
 });
